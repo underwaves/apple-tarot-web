@@ -11,6 +11,7 @@ import AmbientCanvas from '@/components/AmbientCanvas';
 function QueueContent() {
   const searchParams = useSearchParams();
   const initialOrder = searchParams.get('order_no') || '';
+  const initialToken = searchParams.get('tracking_token') || '';
 
   const [searchOrderNo, setSearchOrderNo] = useState(() => {
     if (initialOrder) return initialOrder;
@@ -25,6 +26,7 @@ function QueueContent() {
   });
 
   const [searchTrackingToken, setSearchTrackingToken] = useState(() => {
+    if (initialToken) return initialToken;
     if (typeof window !== 'undefined') {
       try {
         return sessionStorage.getItem('apple_last_tracking_token') || '';
@@ -74,6 +76,43 @@ function QueueContent() {
       ignore = true;
     };
   }, []);
+
+  // Auto-search if both order_no and tracking_token are provided in URL
+  useEffect(() => {
+    if (!initialOrder.trim() || !initialToken.trim()) return;
+
+    let ignore = false;
+    async function autoTrack() {
+      setIsLoading(true);
+      setSearchError('');
+      try {
+        const res = await fetch(
+          `/api/queues?order_no=${encodeURIComponent(initialOrder.trim())}&tracking_token=${encodeURIComponent(
+            initialToken.trim()
+          )}`
+        );
+        const data = await res.json();
+        if (ignore) return;
+        if (data.success && data.queue) {
+          setPersonalQueue(data.queue);
+        } else {
+          setPersonalQueue(null);
+          setSearchError(data.error || 'ไม่พบคิวสำหรับออเดอร์นี้ หรือรหัสติดตามไม่ถูกต้อง');
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการตรวจสอบคิว';
+          setSearchError(msg);
+        }
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
+    }
+    autoTrack();
+    return () => {
+      ignore = true;
+    };
+  }, [initialOrder, initialToken]);
 
   const handleTrackOrder = async (e: React.FormEvent) => {
     e.preventDefault();

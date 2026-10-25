@@ -57,7 +57,9 @@
       "primary_deep": "#D06D80",
       "primary_hover": "#F29EAE"
     },
-    "is_store_open": true
+    "is_store_open": true,
+    "notify_on_slip": true,
+    "notify_on_queue": false
   },
   "categories": [
     {

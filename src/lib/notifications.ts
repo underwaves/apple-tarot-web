@@ -155,8 +155,21 @@ export function formatSlipNotificationMessage(
 export function formatCustomerQueueUpdateMessage(
   queue: QueueItem,
   shopName: string,
-  hostUrl: string
+  hostUrl: string,
+  trackingToken?: string
 ): string {
+  const cleanHost = hostUrl.replace(/\/+$/, '');
+  const cleanToken = trackingToken ? trackingToken.trim() : '';
+
+  const trackingLines = cleanToken
+    ? [
+        `🔗 ตรวจสอบคิวของคุณได้ที่:`,
+        `${cleanHost}/queue?order_no=${encodeURIComponent(queue.order_no)}&tracking_token=${encodeURIComponent(cleanToken)}`,
+      ]
+    : [
+        `💡 สำหรับการติดตามสถานะคิว สามารถติดต่อสอบถามแม่หมอได้โดยตรงทางแชทนี้ พร้อมแจ้งหมายเลขออเดอร์ #${queue.order_no} ได้เลยนะคะ 💬`,
+      ];
+
   const lines = [
     `สวัสดีค่ะคุณ ${queue.customer_name} 🍎`,
     `อัปเดตสถานะคิวดูดวงจากร้าน ${shopName} นะคะ ✨`,
@@ -166,8 +179,7 @@ export function formatCustomerQueueUpdateMessage(
     queue.estimated_time ? `⏱️ ระยะเวลาโดยประมาณ: ${queue.estimated_time}` : '',
     queue.shop_note ? `📝 ข้อความจากแม่หมอ: ${queue.shop_note}` : '',
     ``,
-    `🔗 สามารถติดตามความคืบหน้าของคิวได้ที่:`,
-    `${hostUrl}/queue?order_no=${queue.order_no}`,
+    ...trackingLines,
     ``,
     `ขอบคุณที่ไว้วางใจให้ ${shopName} ดูแลนะคะ 🌙🌷`,
   ];

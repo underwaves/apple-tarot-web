@@ -54,6 +54,8 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
     express_estimated_time: '⚡ ภายใน 12-24 ชั่วโมง',
     is_store_open: true,
     store_close_message: 'ขณะนี้ร้านปิดรับคิวชั่วคราว สามารถแวะชมบริการหรือทักสอบถามทาง LINE ได้นะคะ 🌙',
+    notify_on_slip: true,
+    notify_on_queue: false,
     theme_preset: 'apple',
     custom_theme: {
       primary: '#F6B8C6',
@@ -208,8 +210,14 @@ export function readLocalDb(): LocalDatabase {
   const raw = fs.readFileSync(DATA_FILE, 'utf-8');
   try {
     const parsed = JSON.parse(raw);
+    const parsedSettings = parsed.settings || {};
     return {
-      settings: parsed.settings || DEFAULT_STORE_DATA.settings,
+      settings: {
+        ...DEFAULT_STORE_DATA.settings,
+        ...parsedSettings,
+        notify_on_queue: parsedSettings.notify_on_queue === true,
+        notify_on_slip: parsedSettings.notify_on_slip !== false,
+      },
       categories: parsed.categories || DEFAULT_STORE_DATA.categories,
       orders: parsed.orders || [],
       queues: parsed.queues || [],
@@ -256,8 +264,15 @@ export async function getStoreData() {
         neonGet<MusicTrack[]>('music_tracks', DEFAULT_STORE_DATA.music_tracks),
         neonGet<Review[]>('reviews', DEFAULT_STORE_DATA.reviews),
       ]);
+      const rawSettings = settings || DEFAULT_STORE_DATA.settings;
+      const mergedSettings: StoreSettings = {
+        ...DEFAULT_STORE_DATA.settings,
+        ...rawSettings,
+        notify_on_queue: rawSettings.notify_on_queue === true,
+        notify_on_slip: rawSettings.notify_on_slip !== false,
+      };
       return {
-        settings: settings || DEFAULT_STORE_DATA.settings,
+        settings: mergedSettings,
         categories: categories && categories.length > 0 ? categories : DEFAULT_STORE_DATA.categories,
         music_tracks: music_tracks && music_tracks.length > 0 ? music_tracks : DEFAULT_STORE_DATA.music_tracks,
         reviews: reviews && reviews.length > 0 ? reviews : DEFAULT_STORE_DATA.reviews,
@@ -1307,21 +1322,46 @@ export async function saveCategories(categories: Category[]): Promise<Category[]
   return categories;
 }
 
-export async function saveStoreSettings(settings: StoreSettings): Promise<StoreSettings> {
+export async function saveStoreSettings(settings: Partial<StoreSettings>): Promise<StoreSettings> {
   if (isNeonConfigured) {
     const current = await neonGet<StoreSettings>('settings', DEFAULT_STORE_DATA.settings);
-    const updated = { ...current, ...settings };
+    const updated: StoreSettings = { ...current, ...settings };
+    // Preserve sensitive credentials if not passed in incoming settings (undefined)
+    if (settings.line_channel_access_token === undefined && current.line_channel_access_token !== undefined) {
+      updated.line_channel_access_token = current.line_channel_access_token;
+    }
+    if (settings.webhook_url === undefined && current.webhook_url !== undefined) {
+      updated.webhook_url = current.webhook_url;
+    }
+    if (settings.line_admin_user_id === undefined && current.line_admin_user_id !== undefined) {
+      updated.line_admin_user_id = current.line_admin_user_id;
+    }
     await neonSet('settings', updated);
     try {
       const local = readLocalDb();
-      local.settings = { ...local.settings, ...settings };
+      local.settings = { ...local.settings, ...updated };
       writeLocalDb(local);
     } catch {}
     return updated;
   }
 
   if (isSupabaseConfigured && supabaseAdmin) {
-    for (const [key, value] of Object.entries(settings)) {
+    const { data: existingRows } = await supabaseAdmin.from('store_settings').select('key, value');
+    const existingMap = new Map((existingRows || []).map((r: { key: string; value: unknown }) => [r.key, r.value]));
+
+    const merged: Record<string, unknown> = { ...settings };
+    if (settings.line_channel_access_token === undefined && existingMap.has('line_channel_access_token')) {
+      merged.line_channel_access_token = existingMap.get('line_channel_access_token');
+    }
+    if (settings.webhook_url === undefined && existingMap.has('webhook_url')) {
+      merged.webhook_url = existingMap.get('webhook_url');
+    }
+    if (settings.line_admin_user_id === undefined && existingMap.has('line_admin_user_id')) {
+      merged.line_admin_user_id = existingMap.get('line_admin_user_id');
+    }
+
+    for (const [key, value] of Object.entries(merged)) {
+      if (value === undefined) continue;
       const { error } = await supabaseAdmin
         .from('store_settings')
         .upsert({ key, value, updated_at: new Date().toISOString() });
@@ -1330,11 +1370,23 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
         throw new Error(`Failed to save settings to Supabase: ${error.message}`);
       }
     }
-    return settings;
+    return merged as unknown as StoreSettings;
   }
 
   const local = readLocalDb();
-  local.settings = { ...local.settings, ...settings };
+  const current = local.settings;
+  const updated: StoreSettings = { ...current, ...settings };
+  if (settings.line_channel_access_token === undefined && current.line_channel_access_token !== undefined) {
+    updated.line_channel_access_token = current.line_channel_access_token;
+  }
+  if (settings.webhook_url === undefined && current.webhook_url !== undefined) {
+    updated.webhook_url = current.webhook_url;
+  }
+  if (settings.line_admin_user_id === undefined && current.line_admin_user_id !== undefined) {
+    updated.line_admin_user_id = current.line_admin_user_id;
+  }
+
+  local.settings = updated;
   writeLocalDb(local);
   return local.settings;
 }

@@ -209,7 +209,7 @@ export default function AdminDashboard({
     setIsLoadingData(true);
     try {
       const [storeRes, ordersRes, queuesRes] = await Promise.all([
-        fetch('/api/store'),
+        fetch('/api/store?admin=true'),
         fetch('/api/orders'),
         fetch('/api/queues'),
       ]);
@@ -266,7 +266,7 @@ export default function AdminDashboard({
     async function load() {
       try {
         const [storeRes, ordersRes, queuesRes] = await Promise.all([
-          fetch('/api/store'),
+          fetch('/api/store?admin=true'),
           fetch('/api/orders'),
           fetch('/api/queues'),
         ]);
@@ -582,11 +582,13 @@ export default function AdminDashboard({
   // Open customer notification modal
   const handleOpenNotifyModal = (q: QueueItem) => {
     const relatedOrder = orders.find((o) => o.order_no === q.order_no);
+    const trackingToken = relatedOrder?.tracking_token;
     const hostUrl = typeof window !== 'undefined' ? window.location.origin : '';
     const formattedMsg = formatCustomerQueueUpdateMessage(
       q,
       settings?.shop_name || 'Auralune Tarot',
-      hostUrl
+      hostUrl,
+      trackingToken
     );
     const resolvedQ: QueueItem = {
       ...q,
