@@ -641,7 +641,7 @@ export default function AdminDashboard({
     }
   };
 
-  const handleCreateReview = () => {
+  const handleCreateReview = async () => {
     if (!newReviewAuthor.trim() || !newReviewComment.trim()) {
       showFeedback('กรุณากรอกชื่อลูกค้าและข้อความรีวิวค่ะ', true);
       return;
@@ -653,12 +653,71 @@ export default function AdminDashboard({
       comment: newReviewComment.trim(),
       created_at: new Date().toISOString(),
     };
-    setReviews([rev, ...reviews]);
-    setNewReviewAuthor('');
-    setNewReviewComment('');
-    setNewReviewRating(5);
-    setIsAddingReview(false);
-    showFeedback('เพิ่มรีวิวแล้ว (อย่าลืมกดปุ่ม "บันทึกรีวิว" ด้านบนขวานะคะ) ⭐');
+
+    const nextReviews = [rev, ...reviews];
+    setReviews(nextReviews);
+    setIsSavingReviews(true);
+
+    try {
+      const res = await fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_reviews',
+          reviews: nextReviews,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showFeedback('เพิ่มรีวิวและบันทึกข้อมูลเรียบร้อยแล้วค่ะ! ⭐');
+        setNewReviewAuthor('');
+        setNewReviewComment('');
+        setNewReviewRating(5);
+        setIsAddingReview(false);
+        if (onDataUpdated) onDataUpdated();
+      } else {
+        showFeedback(data.error || 'บันทึกรีวิวไม่สำเร็จ', true);
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการบันทึกรีวิว กรุณาลองใหม่อีกครั้ง', true);
+    } finally {
+      setIsSavingReviews(false);
+    }
+  };
+
+  const handleDeleteReview = (idx: number, customerName: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'ยืนยันการลบรีวิว',
+      message: `ต้องการลบรีวิวของ "${customerName || 'ลูกค้า'}" หรือไม่?`,
+      confirmText: 'ลบรีวิว',
+      cancelText: 'ยกเลิก',
+      variant: 'danger',
+      icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+      onConfirm: async () => {
+        const nextReviews = reviews.filter((_, i) => i !== idx);
+        setReviews(nextReviews);
+        try {
+          const res = await fetch('/api/store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'save_reviews',
+              reviews: nextReviews,
+            }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            showFeedback('ลบรีวิวและบันทึกลงระบบเรียบร้อยแล้วค่ะ ✓');
+            if (onDataUpdated) onDataUpdated();
+          } else {
+            showFeedback(data.error || 'ลบรีวิวไม่สำเร็จ', true);
+          }
+        } catch {
+          showFeedback('เกิดข้อผิดพลาดในการลบรีวิว', true);
+        }
+      },
+    });
   };
 
   // Stats calculation
@@ -2017,9 +2076,15 @@ export default function AdminDashboard({
                         <button
                           type="button"
                           onClick={handleCreateReview}
-                          className="cta-btn py-1.5 px-4 text-xs font-semibold cursor-pointer"
+                          disabled={isSavingReviews}
+                          className="cta-btn py-1.5 px-4 text-xs font-semibold cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                         >
-                          + เพิ่มเข้ารายการ
+                          {isSavingReviews ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Plus className="w-3.5 h-3.5" />
+                          )}
+                          <span>+ บันทึกและเพิ่มรีวิว</span>
                         </button>
                       </div>
                     </div>
@@ -2087,21 +2152,7 @@ export default function AdminDashboard({
 
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setConfirmDialog({
-                                    isOpen: true,
-                                    title: 'ยืนยันการลบรีวิว',
-                                    message: `ต้องการลบรีวิวของ "${rev.customer_name || 'ลูกค้า'}" หรือไม่?`,
-                                    confirmText: 'ลบรีวิว',
-                                    cancelText: 'ยกเลิก',
-                                    variant: 'danger',
-                                    icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
-                                    onConfirm: () => {
-                                      setReviews(reviews.filter((_, i) => i !== idx));
-                                      showFeedback('ลบรีวิวแล้ว (อย่าลืมกดปุ่ม "บันทึกรีวิว" นะคะ)');
-                                    },
-                                  });
-                                }}
+                                onClick={() => handleDeleteReview(idx, rev.customer_name)}
                                 className="text-[#D06D80] p-1.5 hover:bg-[#FCE4EC] rounded cursor-pointer transition"
                                 title="ลบรีวิว"
                               >

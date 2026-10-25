@@ -898,6 +898,13 @@
   ],
   "reviews": [
     {
+      "id": "rev-1792929619947",
+      "customer_name": "คุณมุก",
+      "rating": 5,
+      "comment": "รีวิวทดสอบจ้า",
+      "created_at": "2026-10-25T12:00:19.696Z"
+    },
+    {
       "id": "rev-1792916736827",
       "customer_name": "คุณนลินดา",
       "rating": 5,
