@@ -38,7 +38,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/data ./data
 
-RUN chown -R nextjs:nodejs /app/data
+RUN mkdir -p /app/public/uploads/images /app/public/uploads/music /app/data/uploads/slips && \
+    chown -R nextjs:nodejs /app/data /app/public/uploads
 
 USER nextjs
 
