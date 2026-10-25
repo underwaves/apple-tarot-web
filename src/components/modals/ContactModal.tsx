@@ -57,7 +57,7 @@ export default function ContactModal({
           <div className="flex items-center gap-2">
             <span className="text-xl">💬</span>
             <h3 className="font-serif text-2xl font-bold text-[#D06D80]">
-              ติดต่อสวนแอปเปิ้ล
+              ติดต่อร้าน Auralune
             </h3>
           </div>
           <button

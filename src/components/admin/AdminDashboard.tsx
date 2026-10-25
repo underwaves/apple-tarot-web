@@ -48,10 +48,6 @@ export default function AdminDashboard({
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isSettingPassword, setIsSettingPassword] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
   const [settingsNewPassword, setSettingsNewPassword] = useState('');
   const [settingsConfirmPassword, setSettingsConfirmPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
@@ -249,45 +245,6 @@ export default function AdminDashboard({
     }
   };
 
-  const handleSetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword.trim().length < 4) {
-      setLoginError('รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setLoginError('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน');
-      return;
-    }
-    setIsLoggingIn(true);
-    setLoginError('');
-    try {
-      const res = await fetch('/api/admin/password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          new_password: newPassword.trim(),
-          current_password: currentPassword ? currentPassword.trim() : undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'ตั้งรหัสผ่านไม่สำเร็จ');
-      }
-      setIsAuthenticated(true);
-      setIsSettingPassword(false);
-      setNewPassword('');
-      setConfirmPassword('');
-      setCurrentPassword('');
-      await loadAllData();
-      showFeedback('ตั้งรหัสผ่านใหม่และเข้าสู่ระบบสำเร็จแล้ว ✨');
-    } catch (err: unknown) {
-      setLoginError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการตั้งรหัสผ่าน');
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
   const handleSaveSettingsPassword = async () => {
     if (settingsNewPassword.trim().length < 4) {
       alert('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
@@ -348,128 +305,49 @@ export default function AdminDashboard({
           </div>
 
           <h3 className="font-serif text-2xl font-bold text-[#D06D80]">
-            {isSettingPassword ? '🔑 ตั้งรหัสผ่านหลังบ้าน' : 'เข้าสู่ระบบหลังบ้าน'}
+            เข้าสู่ระบบหลังบ้าน
           </h3>
           <p className="text-xs text-[#947765] mt-1 mb-4">
-            {isSettingPassword
-              ? 'ลูกค้า / เจ้าของร้านสามารถตั้งรหัสผ่านเองได้เลยค่ะ'
-              : 'Auralune Tarot Studio'}
+            Auralune Tarot Studio
           </p>
 
-          {isSettingPassword ? (
-            <form onSubmit={handleSetPassword} className="space-y-3">
-              {loginError && (
-                <div className="p-2 bg-[#FCE4EC] border border-[#F6B8C6] text-[#D06D80] rounded-lg text-xs font-medium">
-                  ⚠️ {loginError}
-                </div>
-              )}
-
-              <div className="space-y-2 text-left">
-                <div>
-                  <label className="text-[11px] text-[#543E30] font-medium block mb-1">
-                    รหัสผ่านใหม่ที่ต้องการใช้ *
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="อย่างน้อย 4 ตัวอักษร"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="font-mono text-sm tracking-wider w-full"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-[#543E30] font-medium block mb-1">
-                    พิมพ์ยืนยันรหัสผ่านใหม่อีกครั้ง *
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="พิมพ์ซ้ำเพื่อความถูกต้อง"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="font-mono text-sm tracking-wider w-full"
-                    required
-                  />
-                </div>
+          <form onSubmit={handleLogin} className="space-y-3">
+            {loginError && (
+              <div className="p-2 bg-[#FCE4EC] border border-[#F6B8C6] text-[#D06D80] rounded-lg text-xs font-medium">
+                ⚠️ {loginError}
               </div>
+            )}
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSettingPassword(false);
-                    setLoginError('');
-                  }}
-                  className="secondary-btn flex-1 py-2.5 text-xs font-semibold cursor-pointer"
-                >
-                  ย้อนกลับ
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  className="cta-btn flex-1 py-2.5 text-xs font-semibold text-[#543E30] flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  {isLoggingIn ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span>บันทึก & เข้าสู่ระบบ</span>
-                  )}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-3">
-              {loginError && (
-                <div className="p-2 bg-[#FCE4EC] border border-[#F6B8C6] text-[#D06D80] rounded-lg text-xs font-medium">
-                  ⚠️ {loginError}
-                </div>
-              )}
+            <input
+              type="password"
+              placeholder="รหัสผ่านหลังบ้าน (apple2026)"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              className="text-center font-mono text-sm tracking-wider"
+              required
+            />
 
-              <input
-                type="password"
-                placeholder="ใส่รหัสผ่านหลังบ้าน (เริ่มต้น: apple2026)"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                className="text-center font-mono text-sm tracking-wider"
-                required
-              />
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="secondary-btn flex-1 py-2.5 text-xs font-semibold cursor-pointer"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  className="cta-btn flex-1 py-2.5 text-xs font-semibold text-[#543E30] flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  {isLoggingIn ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span>เข้าสู่ระบบ</span>
-                  )}
-                </button>
-              </div>
-
-              <div className="pt-2 border-t border-[#F6B8C6]/30">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSettingPassword(true);
-                    setLoginError('');
-                  }}
-                  className="text-xs text-[#D06D80] hover:underline font-semibold cursor-pointer inline-flex items-center gap-1"
-                >
-                  <span>🔑 ตั้งรหัสผ่านเอง / เปลี่ยนรหัสผ่าน</span>
-                </button>
-              </div>
-            </form>
-          )}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="secondary-btn flex-1 py-2.5 text-xs font-semibold cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                disabled={isLoggingIn}
+                className="cta-btn flex-1 py-2.5 text-xs font-semibold text-[#543E30] flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isLoggingIn ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span>เข้าสู่ระบบ</span>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     );
