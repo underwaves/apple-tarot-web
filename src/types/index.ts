@@ -129,6 +129,8 @@ export interface StoreSettings {
   enable_express_queue?: boolean;
   express_queue_fee?: number;
   express_estimated_time?: string;
+  is_store_open?: boolean;
+  store_close_message?: string;
 }
 
 export interface MusicTrack {

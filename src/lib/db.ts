@@ -52,6 +52,8 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
     enable_express_queue: true,
     express_queue_fee: 32,
     express_estimated_time: '⚡ ภายใน 12-24 ชั่วโมง',
+    is_store_open: true,
+    store_close_message: 'ขณะนี้ร้านปิดรับคิวชั่วคราว สามารถแวะชมบริการหรือทักสอบถามทาง LINE ได้นะคะ 🌙',
   },
   categories: [
     {
@@ -358,13 +360,22 @@ export async function createOrder(data: {
         neonGet<Category[]>('categories', DEFAULT_STORE_DATA.categories),
         neonGet<StoreSettings>('settings', DEFAULT_STORE_DATA.settings),
       ]);
+      if (neonSettings && neonSettings.is_store_open === false) {
+        throw new Error(neonSettings.store_close_message || 'ขณะนี้ร้านปิดรับคำสั่งซื้อชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🔒');
+      }
       allPackages = (neonCats || []).flatMap((c) => c.packages);
       if (neonSettings?.express_queue_fee !== undefined) {
         expressFeeSetting = Number(neonSettings.express_queue_fee);
       }
     } catch (e) {
+      if (e instanceof Error && e.message.includes('ปิดรับคำสั่งซื้อชั่วคราว')) {
+        throw e;
+      }
       console.warn('Neon package read failed in createOrder, fallback:', e);
       const local = readLocalDb();
+      if (local.settings.is_store_open === false) {
+        throw new Error(local.settings.store_close_message || 'ขณะนี้ร้านปิดรับคำสั่งซื้อชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🔒');
+      }
       allPackages = local.categories.flatMap((c) => c.packages);
       if (local.settings.express_queue_fee !== undefined) {
         expressFeeSetting = Number(local.settings.express_queue_fee);
@@ -413,6 +424,9 @@ export async function createOrder(data: {
     }));
   } else {
     const local = readLocalDb();
+    if (local.settings.is_store_open === false) {
+      throw new Error(local.settings.store_close_message || 'ขณะนี้ร้านปิดรับคำสั่งซื้อชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🔒');
+    }
     allPackages = local.categories.flatMap((c) => c.packages);
     if (local.settings.express_queue_fee !== undefined) {
       expressFeeSetting = Number(local.settings.express_queue_fee);

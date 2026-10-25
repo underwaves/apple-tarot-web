@@ -79,6 +79,28 @@ export default function Hero({
         {settings.shop_subtitle || 'ดูดวงไพ่ทาโรต์ · ดูดวงความรัก การงาน การเงิน · สีมงคล · วอลเปเปอร์เสริมดวง'}
       </p>
 
+      {/* Store Status Badge (Open / Closed) */}
+      <div className="mt-3 inline-flex items-center justify-center">
+        {settings.is_store_open !== false ? (
+          <div className="flex items-center gap-2 text-[#2E7D32] bg-[#E8F5E9] border border-[#C9DDB8] px-3.5 py-1 rounded-full text-xs font-semibold shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-[#2E7D32] animate-pulse" />
+            <span>เปิดรับคิวปกติ 🟢</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-[#D06D80] bg-[#FCE4EC] border border-[#F6B8C6] px-4 py-1.5 rounded-2xl max-w-md shadow-xs animate-in fade-in duration-200">
+            <div className="flex items-center gap-1.5 font-bold text-xs">
+              <span className="w-2 h-2 rounded-full bg-[#D06D80]" />
+              <span>ร้านปิดรับคิวชั่วคราว 🔒</span>
+            </div>
+            {settings.store_close_message && (
+              <span className="text-[11px] font-normal text-[#543E30] text-center leading-relaxed">
+                {settings.store_close_message}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 4 Quick Action Buttons Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5 w-full mt-6 px-1">
         <button

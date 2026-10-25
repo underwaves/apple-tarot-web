@@ -33,6 +33,9 @@ import {
   Camera,
   ImageIcon,
   RotateCcw,
+  Lock,
+  Unlock,
+  Store,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 import { compressImageToDataUrl } from '@/lib/image-client';
@@ -569,6 +572,44 @@ export default function AdminDashboard({
     }
   };
 
+  // Toggle Store Open / Close Status
+  const [isTogglingStore, setIsTogglingStore] = useState(false);
+  const handleToggleStoreOpen = async (newIsOpen: boolean) => {
+    if (!settings) return;
+    setIsTogglingStore(true);
+    const nextSettings: StoreSettings = {
+      ...settings,
+      is_store_open: newIsOpen,
+    };
+    setSettings(nextSettings);
+
+    try {
+      const res = await fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_settings',
+          settings: nextSettings,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showFeedback(
+          newIsOpen
+            ? 'เปิดร้านรับออเดอร์เรียบร้อยแล้วค่ะ 🟢 ลูกค้าสั่งซื้อได้ตามปกติ'
+            : 'ปิดร้านชั่วคราวแล้วค่ะ 🔴 ล็อคไม่ให้ลูกค้าสั่งซื้อเรียบร้อย'
+        );
+        if (onDataUpdated) onDataUpdated();
+      } else {
+        showFeedback(data.error || 'เปลี่ยนสถานะร้านไม่สำเร็จ', true);
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการเปลี่ยนสถานะร้าน', true);
+    } finally {
+      setIsTogglingStore(false);
+    }
+  };
+
   // Save Settings
   const handleSaveSettings = async () => {
     if (!settings) return;
@@ -805,6 +846,34 @@ export default function AdminDashboard({
           </div>
 
           <div className="flex items-center gap-2">
+            {settings && (
+              <button
+                type="button"
+                onClick={() => handleToggleStoreOpen(settings.is_store_open === false ? true : false)}
+                disabled={isTogglingStore}
+                title={settings.is_store_open === false ? 'คลิกเพื่อเปิดร้านรับออเดอร์' : 'คลิกเพื่อปิดร้านชั่วคราว (ล็อคการสั่งซื้อ)'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer border ${
+                  settings.is_store_open === false
+                    ? 'bg-rose-100 text-rose-700 border-rose-300 hover:bg-rose-200'
+                    : 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                }`}
+              >
+                {isTogglingStore ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : settings.is_store_open === false ? (
+                  <Lock className="w-3.5 h-3.5 text-rose-600" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                )}
+                <span className="hidden sm:inline">
+                  {settings.is_store_open === false ? 'ร้านปิดอยู่ (คลิกเปิด)' : 'ร้านเปิดอยู่ (คลิกปิด)'}
+                </span>
+                <span className="sm:hidden">
+                  {settings.is_store_open === false ? 'ปิดอยู่' : 'เปิดอยู่'}
+                </span>
+              </button>
+            )}
+
             {feedbackMsg && (
               <span
                 className={`text-xs px-2.5 py-1 rounded-full border ${
@@ -879,6 +948,85 @@ export default function AdminDashboard({
               {/* TAB 1: OVERVIEW */}
               {activeTab === 'overview' && (
                 <div className="space-y-4">
+                  {/* Store Status Banner */}
+                  {settings && (
+                    <div
+                      className={`p-4 rounded-2xl border transition shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        settings.is_store_open === false
+                          ? 'bg-gradient-to-r from-rose-50 to-pink-50 border-rose-200'
+                          : 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
+                            settings.is_store_open === false
+                              ? 'bg-rose-500 text-white'
+                              : 'bg-emerald-500 text-white'
+                          }`}
+                        >
+                          {settings.is_store_open === false ? (
+                            <Lock className="w-5 h-5" />
+                          ) : (
+                            <Store className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm text-[#543E30]">
+                              สถานะร้านค้าขณะนี้:{' '}
+                              <span
+                                className={
+                                  settings.is_store_open === false
+                                    ? 'text-rose-600 font-extrabold'
+                                    : 'text-emerald-700 font-extrabold'
+                                }
+                              >
+                                {settings.is_store_open === false
+                                  ? '🔴 ปิดรับคิวชั่วคราว (ล็อคการสั่งซื้อ)'
+                                  : '🟢 เปิดร้านรับออเดอร์ตามปกติ'}
+                              </span>
+                            </h4>
+                          </div>
+                          <p className="text-xs text-[#947765] mt-0.5">
+                            {settings.is_store_open === false
+                              ? `ลูกค้าจะไม่สามารถกดสั่งซื้อหรือใส่ตะกร้าได้ · ข้อความที่แจ้งหน้าร้าน: "${settings.store_close_message || 'ร้านปิดรับคิวชั่วคราว'}"`
+                              : 'ลูกค้าสามารถเลือกแพ็กเกจ ใส่ตะกร้า และสั่งซื้อดูดวงได้ตามปกติ'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleToggleStoreOpen(settings.is_store_open === false ? true : false)
+                          }
+                          disabled={isTogglingStore}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50 ${
+                            settings.is_store_open === false
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                              : 'bg-rose-600 hover:bg-rose-700 text-white'
+                          }`}
+                        >
+                          {isTogglingStore ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : settings.is_store_open === false ? (
+                            <>
+                              <Unlock className="w-4 h-4" />
+                              <span>คลิกเพื่อเปิดร้าน</span>
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-4 h-4" />
+                              <span>คลิกเพื่อปิดร้านชั่วคราว</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Metric Cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="p-3.5 bg-[#FFFEFA] border border-[#FCE4EC] rounded-xl shadow-sm">
@@ -1498,6 +1646,118 @@ export default function AdminDashboard({
                       <Save className="w-4 h-4" />
                       <span>บันทึกการตั้งค่า</span>
                     </button>
+                  </div>
+
+                  {/* Store Status Card */}
+                  <div className="bg-[#FFFEFA] p-4 rounded-xl border-2 border-[#F6B8C6] text-xs shadow-sm space-y-3">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#F6B8C6]/40">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🏪</span>
+                        <div>
+                          <h5 className="font-bold text-sm text-[#D06D80]">
+                            ระบบเปิด-ปิดร้านค้า
+                          </h5>
+                          <p className="text-[11px] text-[#947765]">
+                            เมื่อปิดร้าน ลูกค้าจะไม่สามารถกดสั่งซื้อหรือใส่ตะกร้าได้
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Switch */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextIsOpen = settings.is_store_open === false ? true : false;
+                          handleToggleStoreOpen(nextIsOpen);
+                        }}
+                        disabled={isTogglingStore}
+                        className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden disabled:opacity-50 ${
+                          settings.is_store_open !== false ? 'bg-emerald-500' : 'bg-stone-300'
+                        }`}
+                        title={settings.is_store_open !== false ? 'คลิกเพื่อปิดร้าน' : 'คลิกเพื่อเปิดร้าน'}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out flex items-center justify-center text-[11px] ${
+                            settings.is_store_open !== false ? 'translate-x-7' : 'translate-x-0'
+                          }`}
+                        >
+                          {settings.is_store_open !== false ? '🟢' : '🔒'}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div
+                      className={`p-3 rounded-lg border flex items-center justify-between gap-2 ${
+                        settings.is_store_open !== false
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          : 'bg-rose-50 border-rose-200 text-rose-900'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold flex items-center gap-1.5">
+                          {settings.is_store_open !== false ? (
+                            <>
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              <span>ร้านเปิดรับออเดอร์ตามปกติ</span>
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-4 h-4 text-rose-600" />
+                              <span className="text-rose-700">ร้านปิดรับคิวชั่วคราว (ล็อคการสั่งซื้อ)</span>
+                            </>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#947765] mt-0.5">
+                          {settings.is_store_open !== false
+                            ? 'ลูกค้าสามารถดูดวงและชำระเงินได้ตามปกติ'
+                            : 'ระบบล็อคปุ่มสั่งซื้อและซ่อนแถบตะกร้าสินค้าอัตโนมัติ'}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleToggleStoreOpen(settings.is_store_open === false ? true : false)
+                        }
+                        disabled={isTogglingStore}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50 ${
+                          settings.is_store_open !== false
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        }`}
+                      >
+                        {isTogglingStore ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : settings.is_store_open !== false ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>ปิดร้าน</span>
+                          </>
+                        ) : (
+                          <>
+                            <Unlock className="w-3.5 h-3.5" />
+                            <span>เปิดร้าน</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-[#543E30] font-semibold block mb-1">
+                        ข้อความแจ้งเตือนเมื่อปิดร้าน (แสดงที่หัวเว็บและปุ่มสินค้า)
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.store_close_message || ''}
+                        placeholder="เช่น ร้านปิดรับคิวชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🙏"
+                        onChange={(e) =>
+                          setSettings({ ...settings, store_close_message: e.target.value })
+                        }
+                      />
+                      <p className="text-[10px] text-[#947765] mt-1">
+                        * ข้อความนี้จะแสดงในกล่องแจ้งเตือนสีแดงหน้าร้านเมื่อคุณปิดร้าน
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-3 bg-[#FFFEFA] p-4 rounded-xl border border-[#F6B8C6] text-xs shadow-sm">

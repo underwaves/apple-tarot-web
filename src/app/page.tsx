@@ -287,14 +287,24 @@ export default function HomePage() {
         categories={categories}
         selectedItemIds={selectedItemIds}
         onToggleItem={handleToggleItem}
+        isStoreOpen={settings?.is_store_open ?? true}
+        storeCloseMessage={settings?.store_close_message}
+        onLockedClick={() =>
+          setErrorMessage(
+            settings?.store_close_message ||
+              'ขณะนี้ร้านปิดรับคิวชั่วคราว ระบบล็อคไม่สามารถกดสั่งซื้อได้ค่ะ 🔒'
+          )
+        }
       />
 
-      {/* Sticky Bottom Cart Bar */}
-      <CartBar
-        totalCount={totalCount}
-        totalAmount={totalAmount}
-        onOpenCart={() => setIsCartOpen(true)}
-      />
+      {/* Sticky Bottom Cart Bar (Only when store is open) */}
+      {(settings?.is_store_open ?? true) && (
+        <CartBar
+          totalCount={totalCount}
+          totalAmount={totalAmount}
+          onOpenCart={() => setIsCartOpen(true)}
+        />
+      )}
 
       {/* Step 1: Cart Modal */}
       <CartModal
