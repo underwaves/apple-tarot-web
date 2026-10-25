@@ -1,10 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { formatBaht } from '@/lib/utils';
 import { Order, StoreSettings } from '@/types';
-import { X, ArrowLeft, ArrowRight, Copy, Check } from 'lucide-react';
+import { createPromptPayCardDataUrl } from '@/lib/promptpay';
+import {
+  X,
+  ArrowLeft,
+  ArrowRight,
+  Copy,
+  Check,
+  Download,
+  Loader2,
+  Lock,
+  Sparkles,
+} from 'lucide-react';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -23,18 +34,97 @@ export default function PaymentModal({
   order,
   settings,
 }: PaymentModalProps) {
-  const [qrMode, setQrMode] = useState<'kbank' | 'truemoney'>(() => {
-    if (typeof window === 'undefined') return 'kbank';
+  const [qrMode, setQrMode] = useState<'promptpay' | 'kbank' | 'truemoney'>(() => {
+    if (typeof window === 'undefined') return 'promptpay';
     const p = new URLSearchParams(window.location.search).get('preview');
     if (p === 'payment_truemoney') return 'truemoney';
-    return 'kbank';
+    if (p === 'payment_kbank') return 'kbank';
+    return 'promptpay';
   });
+
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [dynamicQrUrl, setDynamicQrUrl] = useState<string>('');
+  const [cardDownloadUrl, setCardDownloadUrl] = useState<string>('');
+  const [isGeneratingQr, setIsGeneratingQr] = useState<boolean>(true);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
+
+  // Generate PromptPay Dynamic QR with locked amount
+  useEffect(() => {
+    if (!isOpen || !order) return;
+    let ignore = false;
+    setIsGeneratingQr(true);
+    setDownloadSuccess(false);
+
+    const target = settings.promptpay_id || '0968895279';
+    createPromptPayCardDataUrl(target, order.total_amount, {
+      accountName: settings.account_name || 'ด.ญ. ณัฐธยาน์ ขันทอง',
+      orderNo: order.order_no,
+    })
+      .then(({ qrDataUrl, cardDataUrl }) => {
+        if (!ignore) {
+          setDynamicQrUrl(qrDataUrl);
+          setCardDownloadUrl(cardDataUrl);
+          setIsGeneratingQr(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to generate PromptPay dynamic QR:', err);
+        if (!ignore) setIsGeneratingQr(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [
+    isOpen,
+    order?.order_no,
+    order?.total_amount,
+    settings.promptpay_id,
+    settings.account_name,
+  ]);
 
   const copyText = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handleDownloadQr = () => {
+    if (!order) return;
+    setIsDownloading(true);
+
+    try {
+      let downloadHref = '';
+      let filename = '';
+
+      if (qrMode === 'promptpay') {
+        downloadHref = cardDownloadUrl || dynamicQrUrl;
+        filename = `PromptPay-${order.order_no}-${order.total_amount}THB.png`;
+      } else if (qrMode === 'kbank') {
+        downloadHref = '/images/kbank_qr.png';
+        filename = `KBank-QR-${order.order_no}.png`;
+      } else {
+        downloadHref = '/images/truemoney_qr.png';
+        filename = `TrueMoney-QR-${order.order_no}.png`;
+      }
+
+      if (!downloadHref) return;
+
+      const link = document.createElement('a');
+      link.href = downloadHref;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (err) {
+      console.error('Download QR failed:', err);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (!isOpen || !order) return null;
@@ -62,7 +152,7 @@ export default function PaymentModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto py-3 flex flex-col items-center text-center space-y-4">
+        <div className="flex-1 overflow-y-auto py-3 flex flex-col items-center text-center space-y-3.5">
           {/* Order No Pill */}
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FCE4EC] border border-[#F6B8C6]/50 text-xs text-[#7D946D]">
             <span>ออเดอร์:</span>
@@ -85,11 +175,24 @@ export default function PaymentModal({
           </div>
 
           {/* Payment Method Selector Tabs */}
-          <div className="flex items-center justify-center gap-2 p-1 bg-[#FFF8EC] rounded-xl border border-[#F6B8C6]/50 text-xs w-full max-w-xs">
+          <div className="flex items-center justify-center gap-1.5 p-1 bg-[#FFF8EC] rounded-2xl border border-[#F6B8C6]/60 text-xs w-full">
+            <button
+              type="button"
+              onClick={() => setQrMode('promptpay')}
+              className={`flex-1 py-1.5 px-2 rounded-xl font-bold transition cursor-pointer text-xs flex items-center justify-center gap-1 ${
+                qrMode === 'promptpay'
+                  ? 'bg-gradient-to-r from-[#002C6C] to-[#1E40AF] text-white shadow-xs'
+                  : 'text-[#947765] hover:text-[#543E30]'
+              }`}
+            >
+              <Lock className="w-3 h-3 text-emerald-300" />
+              <span>พร้อมเพย์ (ล็อคยอด)</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setQrMode('kbank')}
-              className={`flex-1 py-1.5 px-3 rounded-lg font-semibold transition cursor-pointer text-xs ${
+              className={`flex-1 py-1.5 px-2 rounded-xl font-semibold transition cursor-pointer text-xs ${
                 qrMode === 'kbank'
                   ? 'bg-[#138f2d] text-white shadow-xs'
                   : 'text-[#947765] hover:text-[#543E30]'
@@ -97,10 +200,11 @@ export default function PaymentModal({
             >
               K+ กสิกร
             </button>
+
             <button
               type="button"
               onClick={() => setQrMode('truemoney')}
-              className={`flex-1 py-1.5 px-3 rounded-lg font-semibold transition cursor-pointer text-xs ${
+              className={`flex-1 py-1.5 px-2 rounded-xl font-semibold transition cursor-pointer text-xs ${
                 qrMode === 'truemoney'
                   ? 'bg-[#ff6f00] text-white shadow-xs'
                   : 'text-[#947765] hover:text-[#543E30]'
@@ -110,36 +214,154 @@ export default function PaymentModal({
             </button>
           </div>
 
-          {/* QR Code Container */}
-          <div className="p-3 bg-white rounded-2xl shadow-md border-4 border-[#C9DDB8] relative">
-            {qrMode === 'kbank' ? (
-              <Image
-                src="/images/kbank_qr.png"
-                alt="KBank QR Code"
-                width={224}
-                height={224}
-                unoptimized
-                className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
-              />
-            ) : (
-              <Image
-                src="/images/truemoney_qr.png"
-                alt="TrueMoney QR Code"
-                width={224}
-                height={224}
-                unoptimized
-                className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
-              />
-            )}
-            <div className="mt-1 text-[11px] font-semibold text-[#543E30] uppercase tracking-wider">
-              {qrMode === 'kbank'
-                ? 'KBank · ธนาคารกสิกรไทย'
-                : 'TrueMoney Wallet · ทรูมันนี่'}
+          {/* Locked Amount Announcement Badge (PromptPay Mode) */}
+          {qrMode === 'promptpay' && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8F5E9] border border-emerald-300 text-[11px] text-emerald-800 font-bold shadow-2xs animate-in fade-in duration-200">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span>คิวอาร์นี้ล็อคยอด {formatBaht(order.total_amount)} สแกนแล้วไม่ต้องพิมพ์ยอดเองค่ะ ✨</span>
             </div>
+          )}
+
+          {/* QR Code Container */}
+          <div className="p-3 bg-white rounded-2xl shadow-md border-4 border-[#C9DDB8] relative flex flex-col items-center">
+            {qrMode === 'promptpay' ? (
+              <div className="flex flex-col items-center">
+                <div className="w-full bg-[#002C6C] text-white py-1 px-3 rounded-lg text-center mb-2 flex items-center justify-center gap-1 shadow-2xs">
+                  <span className="font-bold text-[11px] tracking-wider">
+                    THAI QR PAYMENT · พร้อมเพย์
+                  </span>
+                </div>
+
+                {isGeneratingQr ? (
+                  <div className="w-52 h-52 sm:w-56 sm:h-56 flex flex-col items-center justify-center text-xs text-[#947765] gap-2">
+                    <Loader2 className="w-7 h-7 animate-spin text-[#D06D80]" />
+                    <span>กำลังสร้าง QR ล็อคยอดเงิน...</span>
+                  </div>
+                ) : dynamicQrUrl ? (
+                  <img
+                    src={dynamicQrUrl}
+                    alt="PromptPay Dynamic QR Code"
+                    className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
+                  />
+                ) : (
+                  <Image
+                    src="/images/kbank_qr.png"
+                    alt="KBank QR Code"
+                    width={224}
+                    height={224}
+                    unoptimized
+                    className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
+                  />
+                )}
+
+                <div className="mt-1 text-[11px] font-bold text-[#002C6C]">
+                  ยอดเงินล็อค: {formatBaht(order.total_amount)}
+                </div>
+              </div>
+            ) : qrMode === 'kbank' ? (
+              <>
+                <Image
+                  src="/images/kbank_qr.png"
+                  alt="KBank QR Code"
+                  width={224}
+                  height={224}
+                  unoptimized
+                  className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
+                />
+                <div className="mt-1 text-[11px] font-semibold text-[#543E30] uppercase tracking-wider">
+                  KBank · ธนาคารกสิกรไทย
+                </div>
+              </>
+            ) : (
+              <>
+                <Image
+                  src="/images/truemoney_qr.png"
+                  alt="TrueMoney QR Code"
+                  width={224}
+                  height={224}
+                  unoptimized
+                  className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
+                />
+                <div className="mt-1 text-[11px] font-semibold text-[#543E30] uppercase tracking-wider">
+                  TrueMoney Wallet · ทรูมันนี่
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Save QR Code Button (Requested Feature) */}
+          <div className="w-full flex flex-col items-center space-y-1">
+            <button
+              type="button"
+              onClick={handleDownloadQr}
+              disabled={isDownloading || (qrMode === 'promptpay' && isGeneratingQr)}
+              className={`w-full max-w-xs py-2.5 px-4 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer disabled:opacity-50 ${
+                downloadSuccess
+                  ? 'bg-emerald-600'
+                  : qrMode === 'promptpay'
+                  ? 'bg-gradient-to-r from-[#002C6C] to-[#1E40AF] hover:brightness-110'
+                  : qrMode === 'kbank'
+                  ? 'bg-[#138f2d] hover:brightness-110'
+                  : 'bg-[#ff6f00] hover:brightness-110'
+              }`}
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>กำลังบันทึกรูป...</span>
+                </>
+              ) : downloadSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-200" />
+                  <span>บันทึกรูป QR Code สำเร็จแล้วค่ะ! 📲</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>
+                    {qrMode === 'promptpay'
+                      ? `💾 บันทึกรูป QR Code (ล็อคยอด ${formatBaht(order.total_amount)})`
+                      : '💾 บันทึกรูป QR Code ลงเครื่อง'}
+                  </span>
+                </>
+              )}
+            </button>
+            <p className="text-[10px] text-[#947765]">
+              {qrMode === 'promptpay'
+                ? '* บันทึกรูปแล้วเปิดแอปธนาคาร เลือก "สแกนจากรูปภาพ" ได้ทันทีค่ะ'
+                : '* บันทึกรูปภาพแล้วนำไปสแกนจ่ายในแอปธนาคาร'}
+            </p>
           </div>
 
           {/* Account Details Box */}
           <div className="w-full bg-[#FFFEFA] border border-[#FCE4EC] rounded-2xl p-3.5 text-left space-y-2 text-xs shadow-xs">
+            {/* PromptPay */}
+            <div className="flex justify-between items-center text-[#947765]">
+              <span className="font-medium text-[#543E30]">พร้อมเพย์ (PromptPay):</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-[#D06D80] text-sm">
+                  {settings.promptpay_id || '096-889-5279'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyText(settings.promptpay_id || '0968895279', 'promptpay')
+                  }
+                  className="py-0.5 px-2 rounded-lg bg-[#FCE4EC] text-[#543E30] hover:bg-[#F6B8C6] transition flex items-center gap-1 cursor-pointer"
+                  title="คัดลอกเบอร์พร้อมเพย์"
+                >
+                  {copiedField === 'promptpay' ? (
+                    <Check className="w-3.5 h-3.5 text-[#7D946D]" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                  <span className="text-[10px] font-semibold">
+                    {copiedField === 'promptpay' ? 'คัดลอกแล้ว' : 'คัดลอก'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
             {/* KBank Account */}
             <div className="flex justify-between items-center text-[#947765]">
               <span>กสิกรไทย (KBANK):</span>
@@ -148,6 +370,7 @@ export default function PaymentModal({
                   145-1-03659-5
                 </span>
                 <button
+                  type="button"
                   onClick={() => copyText('1451036595', 'kbank')}
                   className="py-0.5 px-2 rounded-lg bg-[#FCE4EC] text-[#543E30] hover:bg-[#F6B8C6] transition flex items-center gap-1 cursor-pointer"
                   title="คัดลอกเลขบัญชี"
@@ -164,30 +387,6 @@ export default function PaymentModal({
               </div>
             </div>
 
-            {/* PromptPay */}
-            <div className="flex justify-between items-center text-[#947765]">
-              <span>พร้อมเพย์:</span>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-[#543E30] text-sm">
-                  {settings.promptpay_id || '096-889-5279'}
-                </span>
-                <button
-                  onClick={() => copyText(settings.promptpay_id || '0968895279', 'promptpay')}
-                  className="py-0.5 px-2 rounded-lg bg-[#FCE4EC] text-[#543E30] hover:bg-[#F6B8C6] transition flex items-center gap-1 cursor-pointer"
-                  title="คัดลอก"
-                >
-                  {copiedField === 'promptpay' ? (
-                    <Check className="w-3.5 h-3.5 text-[#7D946D]" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                  <span className="text-[10px] font-semibold">
-                    {copiedField === 'promptpay' ? 'คัดลอกแล้ว' : 'คัดลอก'}
-                  </span>
-                </button>
-              </div>
-            </div>
-
             {/* TrueMoney */}
             <div className="flex justify-between items-center text-[#947765]">
               <span>ทรูมันนี่ วอลเล็ท:</span>
@@ -196,6 +395,7 @@ export default function PaymentModal({
                   096-889-5279
                 </span>
                 <button
+                  type="button"
                   onClick={() => copyText('0968895279', 'truemoney')}
                   className="py-0.5 px-2 rounded-lg bg-[#FCE4EC] text-[#543E30] hover:bg-[#F6B8C6] transition flex items-center gap-1 cursor-pointer"
                   title="คัดลอกเบอร์วอลเล็ท"
@@ -213,8 +413,8 @@ export default function PaymentModal({
             </div>
 
             {/* Account Name */}
-            <div className="flex justify-between text-[#947765] pt-1 border-t border-[#FCE4EC]">
-              <span>ชื่อบัญชี:</span>
+            <div className="flex justify-between text-[#947765] pt-1.5 border-t border-[#FCE4EC]">
+              <span>ชื่อบัญชีรับเงิน:</span>
               <span className="font-semibold text-[#543E30]">
                 {settings.account_name || 'ด.ญ. ณัฐธยาน์ ขันทอง'}
               </span>

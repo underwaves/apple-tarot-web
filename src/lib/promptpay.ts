@@ -1,3 +1,5 @@
+import QRCode from 'qrcode';
+
 /**
  * PromptPay EMVCo QR Code Payload Generator with CRC16-CCITT Checksum
  */
@@ -62,4 +64,130 @@ export function generatePromptPayPayload(
   const checksum = crc16(payload + checksumPrefix);
 
   return payload + checksumPrefix + checksum;
+}
+
+/**
+ * Generate a complete Thai QR Payment card data URL (Canvas) and raw QR data URL
+ */
+export async function createPromptPayCardDataUrl(
+  target: string,
+  amount: number,
+  options?: {
+    accountName?: string;
+    orderNo?: string;
+  }
+): Promise<{ qrDataUrl: string; cardDataUrl: string }> {
+  const payload = generatePromptPayPayload(target, amount);
+
+  // 1. Raw QR Code Image
+  const qrDataUrl = await QRCode.toDataURL(payload, {
+    width: 400,
+    margin: 2,
+    color: {
+      dark: '#0f172a',
+      light: '#ffffff',
+    },
+    errorCorrectionLevel: 'M',
+  });
+
+  // 2. Client-side Canvas rendering for official Thai QR Payment card format
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    try {
+      const canvas = document.createElement('canvas');
+      const width = 600;
+      const height = 780;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      if (ctx) {
+        // Card white background
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+
+        // Header Background (PromptPay / Thai QR Official Navy Blue)
+        ctx.fillStyle = '#002C6C';
+        ctx.fillRect(0, 0, width, 115);
+
+        // Header Title
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('THAI QR PAYMENT', width / 2, 50);
+
+        ctx.font = '500 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = '#93C5FD';
+        ctx.fillText('พร้อมเพย์ · สแกนจ่ายเงินได้ทุกธนาคาร', width / 2, 85);
+
+        // Load and draw QR code
+        const img = new Image();
+        img.src = qrDataUrl;
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+
+        const qrSize = 380;
+        const qrX = (width - qrSize) / 2;
+        const qrY = 140;
+        ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+
+        // Divider line
+        ctx.strokeStyle = '#E5E7EB';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(50, 545);
+        ctx.lineTo(width - 50, 545);
+        ctx.stroke();
+
+        // Merchant / Account Info
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('ชื่อบัญชีรับเงิน', width / 2, 575);
+
+        ctx.fillStyle = '#1F2937';
+        ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(options?.accountName || 'ด.ญ. ณัฐธยาน์ ขันทอง', width / 2, 608);
+
+        // Amount Box
+        ctx.fillStyle = '#F0FDF4';
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(50, 630, width - 100, 80, 16);
+        } else {
+          ctx.fillRect(50, 630, width - 100, 80);
+        }
+        ctx.fill();
+
+        ctx.strokeStyle = '#86EFAC';
+        ctx.lineWidth = 1.5;
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(50, 630, width - 100, 80, 16);
+        } else {
+          ctx.strokeRect(50, 630, width - 100, 80);
+        }
+        ctx.stroke();
+
+        // Amount text
+        ctx.fillStyle = '#166534';
+        ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(`฿${amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, width / 2, 672);
+
+        ctx.fillStyle = '#15803D';
+        ctx.font = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(`🔒 ยอดเงินถูกล็อคอัตโนมัติ ${options?.orderNo ? `(ออเดอร์ #${options.orderNo})` : ''}`, width / 2, 698);
+
+        // Footer Guidance
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('เปิดแอปธนาคารใดก็ได้ แล้วเลือกภาพนี้เพื่อสแกนชำระเงินได้ทันที', width / 2, 745);
+
+        const cardDataUrl = canvas.toDataURL('image/png');
+        return { qrDataUrl, cardDataUrl };
+      }
+    } catch (err) {
+      console.warn('Canvas rendering error, using raw QR:', err);
+    }
+  }
+
+  return { qrDataUrl, cardDataUrl: qrDataUrl };
 }
