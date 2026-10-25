@@ -273,7 +273,7 @@ export default function AdminDashboard({
             เข้าสู่ระบบหลังบ้าน
           </h3>
           <p className="text-xs text-[#947765] mt-1 mb-4">
-            สวนแอปเปิ้ล ออร์ชาร์ด · Apple Orchard Studio
+            Auralune Tarot Studio
           </p>
 
           <form onSubmit={handleLogin} className="space-y-3">
@@ -525,7 +525,7 @@ export default function AdminDashboard({
                 ระบบจัดการหลังบ้าน (Admin Studio)
               </h3>
               <p className="text-[11px] text-[#947765]">
-                สวนแอปเปิ้ล ออร์ชาร์ด · ข้อมูลอัปเดตตามเวลาจริง
+                Auralune Tarot Studio · ข้อมูลอัปเดตตามเวลาจริง
               </p>
             </div>
           </div>

@@ -22,7 +22,7 @@ export default function AdminPage() {
           ระบบจัดการหลังบ้าน
         </h1>
         <p className="text-xs text-[#d8c3b0]">
-          สวนแอปเปิ้ล ออร์ชาร์ด (Apple Orchard Admin Studio)
+          Auralune Tarot Admin Studio
         </p>
 
         <div className="pt-2 flex items-center justify-center gap-3">

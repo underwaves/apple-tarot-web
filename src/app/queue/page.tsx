@@ -164,7 +164,7 @@ function QueueContent() {
                 ติดตามคิวและคำสั่งซื้อ
               </h1>
               <p className="text-xs text-[#947765]">
-                สวนแอปเปิ้ล ออร์ชาร์ด · Apple Orchard Studio
+                Auralune Tarot Studio
               </p>
             </div>
           </div>
