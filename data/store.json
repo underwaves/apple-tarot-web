@@ -44,7 +44,20 @@
     "express_estimated_time": "⚡ ภายใน 12-24 ชั่วโมง",
     "bank_account_no": "145-1-03659-5",
     "truemoney_phone": "096-889-5279",
-    "qr_image_url": "/images/kbank_qr.png"
+    "qr_image_url": "/images/kbank_qr.png",
+    "theme_preset": "apple",
+    "custom_theme": {
+      "primary": "#F6B8C6",
+      "secondary": "#A8B99A",
+      "text_deep": "#543E30",
+      "text_soft": "#947765",
+      "bg_vanilla": "#FFF8EC",
+      "light_tone": "#FCE4EC",
+      "accent_tone": "#F6D1B5",
+      "primary_deep": "#D06D80",
+      "primary_hover": "#F29EAE"
+    },
+    "is_store_open": true
   },
   "categories": [
     {

@@ -6,10 +6,12 @@ import {
   addManualQueue,
   deleteQueue,
   getOrder,
+  getStoreData,
 } from '@/lib/db';
 import { verifyAdminSession } from '@/lib/auth';
 import { maskName } from '@/lib/utils';
 import { PublicQueueItem } from '@/types';
+import { dispatchShopNotification } from '@/lib/notifications';
 
 export async function GET(req: Request) {
   try {
@@ -93,6 +95,20 @@ export async function POST(req: Request) {
 
     if (action === 'update_status' && queue_id && status) {
       const updated = await updateQueueStatus(queue_id, status, estimated_time, shop_note, is_express);
+
+      // Notify Shop LINE / Webhook
+      try {
+        const storeData = await getStoreData();
+        if (storeData?.settings?.notify_on_queue !== false) {
+          const queueNotice = `✨ [${storeData?.settings?.shop_name || 'Auralune'}] อัปเดตสถานะคิวแล้ว\n━━━━━━━━━━━━━━━━━━━━\nคิวที่ #${updated.queue_no} (คุณ ${updated.customer_name})\n🔮 สถานะ: "${updated.status}"\n${updated.shop_note ? `📝 โน้ต: ${updated.shop_note}\n` : ''}⏱️ เวลา: ${updated.estimated_time || '-'}`;
+          dispatchShopNotification(queueNotice, storeData?.settings).catch((e) =>
+            console.warn('Queue notification error:', e)
+          );
+        }
+      } catch (e) {
+        console.warn('Failed to dispatch queue notification:', e);
+      }
+
       return NextResponse.json({ success: true, queue: updated });
     }
 

@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { getOrder, uploadSlip } from '@/lib/db';
+import { getOrder, uploadSlip, getStoreData } from '@/lib/db';
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
+import { dispatchShopNotification, formatSlipNotificationMessage } from '@/lib/notifications';
 
 // Store slips outside public directory to prevent direct execution / unauthenticated public scraping
 const SLIP_STORAGE_DIR = path.join(process.cwd(), 'data', 'uploads', 'slips');
@@ -189,6 +190,20 @@ export async function POST(req: Request) {
     }
 
     const updatedOrder = await uploadSlip(orderNo, slipUrl, safeFilename);
+
+    // Notify Shop Admin via LINE Messaging API / Webhook immediately
+    try {
+      const storeData = await getStoreData();
+      if (storeData?.settings?.notify_on_slip !== false) {
+        const msg = formatSlipNotificationMessage(updatedOrder, storeData.settings);
+        dispatchShopNotification(msg, storeData.settings).catch((e) =>
+          console.warn('Shop notification error:', e)
+        );
+      }
+    } catch (e) {
+      console.warn('Failed to dispatch slip notification:', e);
+    }
+
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอัปโหลดสลิป';

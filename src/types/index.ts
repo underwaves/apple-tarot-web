@@ -66,6 +66,8 @@ export interface QueueItem {
   customer_name: string;
   items_summary: string;
   contact_info: string;
+  contact_channel?: string;
+  contact_value?: string;
   status: QueueStatus;
   is_express?: boolean;
   estimated_time?: string;
@@ -145,6 +147,11 @@ export interface StoreSettings {
   store_close_message?: string;
   theme_preset?: string;
   custom_theme?: ThemeColors;
+  line_channel_access_token?: string;
+  line_admin_user_id?: string;
+  webhook_url?: string;
+  notify_on_slip?: boolean;
+  notify_on_queue?: boolean;
 }
 
 export interface MusicTrack {

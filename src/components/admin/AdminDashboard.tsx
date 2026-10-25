@@ -48,9 +48,17 @@ import {
   Phone,
   ArrowUp,
   ArrowDown,
+  Bell,
+  Copy,
+  Send,
+  HelpCircle,
+  Info,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 import { compressImageToDataUrl } from '@/lib/image-client';
+import { formatCustomerQueueUpdateMessage } from '@/lib/notifications';
 
 const DEFAULT_BANNER =
   'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1200&q=80';
@@ -97,6 +105,12 @@ export default function AdminDashboard({
   const [isSavingReviews, setIsSavingReviews] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [queueFilter, setQueueFilter] = useState<'all' | 'express'>('all');
+
+  // Customer queue notification modal state
+  const [notifyQueueItem, setNotifyQueueItem] = useState<QueueItem | null>(null);
+  const [customNotifyMessage, setCustomNotifyMessage] = useState<string>('');
+  const [isTestingNotification, setIsTestingNotification] = useState<boolean>(false);
+  const [showLineHelpGuide, setShowLineHelpGuide] = useState<boolean>(false);
 
   // Slip preview modal
   const [previewSlipUrl, setPreviewSlipUrl] = useState<string | null>(null);
@@ -534,6 +548,97 @@ export default function AdminDashboard({
       }
     } catch {
       showFeedback('อัปเดตคิวไม่สำเร็จ', true);
+    }
+  };
+
+  // Test shop notification (LINE / Webhook)
+  const handleTestNotification = async () => {
+    if (!settings) return;
+    setIsTestingNotification(true);
+    try {
+      const res = await fetch('/api/admin/notify/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          line_channel_access_token: settings.line_channel_access_token,
+          line_admin_user_id: settings.line_admin_user_id,
+          webhook_url: settings.webhook_url,
+          shop_name: settings.shop_name,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showFeedback('🔔 ส่งข้อความทดสอบเข้า LINE / Webhook สำเร็จแล้วค่ะ!');
+      } else {
+        showFeedback(data.error || 'การส่งทดสอบล้มเหลว กรุณาตรวจสอบ Token หรือ ID ค่ะ', true);
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการเชื่อมต่อระบบแจ้งเตือน', true);
+    } finally {
+      setIsTestingNotification(false);
+    }
+  };
+
+  // Open customer notification modal
+  const handleOpenNotifyModal = (q: QueueItem) => {
+    const relatedOrder = orders.find((o) => o.order_no === q.order_no);
+    const hostUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const formattedMsg = formatCustomerQueueUpdateMessage(
+      q,
+      settings?.shop_name || 'Auralune Tarot',
+      hostUrl
+    );
+    const resolvedQ: QueueItem = {
+      ...q,
+      contact_channel: q.contact_channel || relatedOrder?.contact_channel || 'LINE',
+      contact_value: q.contact_value || relatedOrder?.contact_value || '',
+    };
+    setNotifyQueueItem(resolvedQ);
+    setCustomNotifyMessage(formattedMsg);
+  };
+
+  // Copy customer message
+  const handleCopyCustomerMessage = (text: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+    }
+    showFeedback('คัดลอกข้อความแจ้งเตือนแล้วค่ะ 📋');
+  };
+
+  // 1-click launch chat for customer
+  const handleOpenCustomerChat = (q: QueueItem, text: string) => {
+    const channel = (q.contact_channel || '').toLowerCase().trim();
+    const val = (q.contact_value || '').trim();
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+    }
+
+    if (channel.includes('line')) {
+      window.open(`https://line.me/R/msg/text/?${encodeURIComponent(text)}`, '_blank');
+      showFeedback('คัดลอกข้อความแล้ว! กำลังเปิด LINE ค่ะ 🟢');
+    } else if (channel.includes('instagram') || channel.includes('ig')) {
+      const cleanUser = val.replace(/^@/, '').trim();
+      if (cleanUser) {
+        window.open(`https://instagram.com/${cleanUser}/`, '_blank');
+        showFeedback(`คัดลอกข้อความแล้ว! กำลังเปิด IG @${cleanUser} ค่ะ 📸`);
+      } else {
+        showFeedback('คัดลอกข้อความแล้วค่ะ 📋');
+      }
+    } else if (channel.includes('facebook') || channel.includes('fb')) {
+      const cleanUser = val.replace(/^https?:\/\/(www\.)?facebook\.com\//, '').trim();
+      if (cleanUser) {
+        window.open(val.startsWith('http') ? val : `https://facebook.com/${cleanUser}`, '_blank');
+        showFeedback(`คัดลอกข้อความแล้ว! กำลังเปิด Facebook ค่ะ 🔵`);
+      } else {
+        showFeedback('คัดลอกข้อความแล้วค่ะ 📋');
+      }
+    } else if (channel.includes('phone') || channel.includes('เบอร์') || channel.includes('tel')) {
+      const cleanPhone = val.replace(/[^0-9+]/g, '');
+      window.open(`sms:${cleanPhone}?body=${encodeURIComponent(text)}`, '_self');
+      showFeedback(`คัดลอกข้อความแล้ว! กำลังเปิด SMS ${cleanPhone} ค่ะ 📱`);
+    } else {
+      showFeedback('คัดลอกข้อความแล้วค่ะ 📋 นำไปส่งให้ลูกค้าได้เลย');
     }
   };
 
@@ -2202,6 +2307,31 @@ export default function AdminDashboard({
                             </div>
                           </div>
 
+                          {/* Customer Contact & Direct Notification Bar */}
+                          {(() => {
+                            const relOrder = orders.find((o) => o.order_no === q.order_no);
+                            const ch = q.contact_channel || relOrder?.contact_channel;
+                            const val = q.contact_value || relOrder?.contact_value;
+                            return (
+                              <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-[#FFF8EC]/80 border border-[#F6B8C6]/40">
+                                <div className="flex items-center gap-1.5 text-[11px] text-[#543E30]">
+                                  <span className="font-semibold text-[#D06D80]">📱 ข้อมูลติดต่อ:</span>
+                                  <span className="font-medium">{ch || 'ช่องทาง'}:</span>
+                                  <span className="font-bold text-[#D06D80]">{val || q.contact_info || '-'}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenNotifyModal(q)}
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-gradient-to-r from-[#F6B8C6] to-[#FCE4EC] hover:brightness-95 text-[#543E30] border border-[#F6B8C6] flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                                  title="ส่งข้อความอัปเดตสถานะคิวให้ลูกค้า"
+                                >
+                                  <Send className="w-3 h-3 text-[#D06D80]" />
+                                  <span>แจ้งเตือนคิวลูกค้า 💬</span>
+                                </button>
+                              </div>
+                            );
+                          })()}
+
                           <div className="flex items-center justify-between pt-1 border-t border-[#FCE4EC]/50">
                             <button
                               type="button"
@@ -2592,6 +2722,196 @@ export default function AdminDashboard({
                       <MessageCircle className="w-4 h-4 text-[#D06D80]" />
                       <span>จัดการช่องทางติดต่อ ✨</span>
                     </button>
+                  </div>
+
+                  {/* Notification Settings Card (LINE & Webhook) */}
+                  <div className="bg-[#FFFEFA] p-4 rounded-xl border-2 border-[#F6B8C6] text-xs shadow-sm space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#F6B8C6]/40">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#F6B8C6] to-[#FCE4EC] flex items-center justify-center text-lg shadow-2xs">
+                          🔔
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h5 className="font-bold text-sm text-[#D06D80]">
+                              ระบบแจ้งเตือนร้านค้า (LINE & Webhook)
+                            </h5>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F5E9] text-emerald-700 border border-emerald-200">
+                              แนะนำ ✨
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#947765]">
+                            ส่งแจ้งเตือนเข้า LINE หรือ Webhook ทันทีเมื่อลูกค้าแนบสลิปใหม่ หรือเมื่ออัปเดตคิว
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Notification Toggles */}
+                    <div className="space-y-2.5 bg-[#FFF8EC]/60 p-3 rounded-xl border border-[#F6B8C6]/50">
+                      <label className="flex items-center gap-2.5 cursor-pointer text-[#543E30] font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={settings.notify_on_slip !== false}
+                          onChange={(e) =>
+                            setSettings({ ...settings, notify_on_slip: e.target.checked })
+                          }
+                          className="w-4 h-4 accent-[#D06D80] rounded cursor-pointer"
+                        />
+                        <span>🔔 แจ้งเตือนเมื่อมีลูกค้าโอนเงินและแนบสลิปใหม่ (แนะนำมาก!)</span>
+                      </label>
+                      <p className="text-[10px] text-[#947765] pl-6.5">
+                        เมื่อลูกค้าอัปโหลดสลิปที่หน้าเว็บ ระบบจะส่งรายละเอียดออเดอร์ ยอดเงิน และข้อมูลติดต่อเข้า LINE ของคุณทันที
+                      </p>
+
+                      <label className="flex items-center gap-2.5 cursor-pointer text-[#543E30] font-semibold pt-1">
+                        <input
+                          type="checkbox"
+                          checked={settings.notify_on_queue === true}
+                          onChange={(e) =>
+                            setSettings({ ...settings, notify_on_queue: e.target.checked })
+                          }
+                          className="w-4 h-4 accent-[#D06D80] rounded cursor-pointer"
+                        />
+                        <span>📋 แจ้งเตือนร้านค้าเมื่อสถานะคิวงานมีการเปลี่ยนแปลง</span>
+                      </label>
+                      <p className="text-[10px] text-[#947765] pl-6.5">
+                        บันทึกประวัติการเปลี่ยนสถานะคิวเข้า LINE / Webhook
+                      </p>
+                    </div>
+
+                    {/* LINE Messaging API Credentials */}
+                    <div className="space-y-3 pt-1">
+                      <div className="flex items-center justify-between">
+                        <h6 className="font-bold text-xs text-[#543E30] flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#06C755]" />
+                          <span>ตั้งค่า LINE Messaging API (ฟรี 100%)</span>
+                        </h6>
+                        <button
+                          type="button"
+                          onClick={() => setShowLineHelpGuide(!showLineHelpGuide)}
+                          className="text-[11px] text-[#D06D80] hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" />
+                          <span>{showLineHelpGuide ? 'ซ่อนวิธีตั้งค่า' : 'วิธีรับ Token ฟรี (3 ขั้นตอน)'}</span>
+                        </button>
+                      </div>
+
+                      {/* Collapsible LINE setup guide */}
+                      {showLineHelpGuide && (
+                        <div className="p-3.5 rounded-xl bg-[#E8F5E9]/50 border border-[#A5D6A7] text-[11px] text-[#2E7D32] space-y-2">
+                          <p className="font-bold text-xs flex items-center gap-1 text-[#1B5E20]">
+                            <span>💡 วิธีเชื่อมต่อ LINE Messaging API ฟรีใน 2 นาที:</span>
+                          </p>
+                          <ol className="list-decimal pl-4 space-y-1.5 leading-relaxed">
+                            <li>
+                              เข้าเว็บไซต์{' '}
+                              <a
+                                href="https://developers.line.biz"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline font-bold text-[#1B5E20]"
+                              >
+                                developers.line.biz
+                              </a>{' '}
+                              แล้วกด <b>Log in</b> ด้วยบัญชี LINE ส่วนตัวของคุณ
+                            </li>
+                            <li>
+                              กดสร้าง <b>Provider</b> (เช่น ตั้งชื่อว่า <i>Apple Tarot</i>) แล้วเลือก <b>Create a Messaging API channel</b>
+                            </li>
+                            <li>
+                              ไปที่แท็บ <b>Messaging API</b> เลื่อนลงล่างสุด แล้วกดปุ่ม <b>Issue</b> ตรง <i>Channel access token (long-lived)</i> แล้วคัดลอกมาวางในช่องด้านล่าง
+                            </li>
+                            <li>
+                              ไปที่แท็บ <b>Basic settings</b> เลื่อนลงมาที่หัวข้อ <i>Your user ID</i> (ขึ้นต้นด้วย <code>U...</code>) แล้วคัดลอกมาวางในช่อง User ID
+                            </li>
+                            <li>
+                              สแกน QR Code เพื่อแอดเพื่อนกับ LINE Official Bot ของคุณ (เพื่อให้บอทส่งข้อความหาคุณได้)
+                            </li>
+                            <li>
+                              กดปุ่ม <b>&quot;ทดสอบส่งข้อความแจ้งเตือน&quot;</b> ด้านล่าง แล้วกด <b>&quot;บันทึกการตั้งค่า&quot;</b> ค่ะ 🎉
+                            </li>
+                          </ol>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-[11px] text-[#543E30] font-semibold block mb-1">
+                          LINE Channel Access Token (Long-lived)
+                        </label>
+                        <input
+                          type="password"
+                          value={settings.line_channel_access_token || ''}
+                          placeholder="วาง Channel Access Token ที่ได้จาก LINE Developers (เช่น eyJhbGciOi...)"
+                          onChange={(e) =>
+                            setSettings({ ...settings, line_channel_access_token: e.target.value })
+                          }
+                          className="font-mono text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-[#543E30] font-semibold block mb-1">
+                          LINE Admin User ID หรือ Group ID (ผู้รับแจ้งเตือน)
+                        </label>
+                        <input
+                          type="text"
+                          value={settings.line_admin_user_id || ''}
+                          placeholder="User ID ของคุณ (ขึ้นต้นด้วย U...) หรือ Group ID (ขึ้นต้นด้วย C... / R...)"
+                          onChange={(e) =>
+                            setSettings({ ...settings, line_admin_user_id: e.target.value })
+                          }
+                          className="font-mono text-xs"
+                        />
+                        <p className="text-[10px] text-[#947765] mt-1">
+                          * ดู Your user ID ได้ที่แท็บ Basic settings ใน LINE Developers Console
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Webhook fallback */}
+                    <div className="space-y-2 pt-2 border-t border-[#F6B8C6]/30">
+                      <label className="text-[11px] text-[#543E30] font-semibold block">
+                        Webhook URL ทางเลือกเสริม (เช่น Discord Webhook / Make / Zapier)
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.webhook_url || ''}
+                        placeholder="https://discord.com/api/webhooks/... หรือ https://hook.eu2.make.com/..."
+                        onChange={(e) =>
+                          setSettings({ ...settings, webhook_url: e.target.value })
+                        }
+                        className="font-mono text-xs"
+                      />
+                    </div>
+
+                    {/* Test Notification Button */}
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#F6B8C6]/30">
+                      <button
+                        type="button"
+                        onClick={handleTestNotification}
+                        disabled={
+                          isTestingNotification ||
+                          (!settings.line_channel_access_token && !settings.webhook_url)
+                        }
+                        className="py-2 px-4 rounded-xl bg-gradient-to-r from-[#D06D80] to-[#E28E9D] hover:brightness-105 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
+                      >
+                        {isTestingNotification ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>กำลังทดสอบส่งข้อความ...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Bell className="w-3.5 h-3.5" />
+                            <span>🔔 ทดสอบส่งข้อความแจ้งเตือนทันที</span>
+                          </>
+                        )}
+                      </button>
+                      <span className="text-[10px] text-[#947765]">
+                        * กรุณากด &quot;บันทึกการตั้งค่า&quot; ด้านบนเพื่อบันทึกการเปลี่ยนแปลง
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-3 bg-[#FFFEFA] p-4 rounded-xl border border-[#F6B8C6] text-xs shadow-sm">
@@ -3423,6 +3743,147 @@ export default function AdminDashboard({
             <p className="text-xs text-[#947765] mt-3 leading-relaxed">
               ✨ เพลงนี้เชื่อมต่อกับ YouTube เรียบร้อยแล้วค่ะ! เมื่อกดปุ่ม &quot;บันทึกเพลง&quot; ด้านล่าง เพลงนี้จะเล่นเป็นเสียงพื้นหลังบนหน้าเว็บหลักให้ลูกค้าฟังได้ทันทีค่ะ 🍎
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Queue Update Messaging Modal */}
+      {notifyQueueItem && (
+        <div
+          onClick={() => setNotifyQueueItem(null)}
+          className="fixed inset-0 z-60 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#FFF8EC] border-2 border-[#F6B8C6] w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl text-[#543E30] animate-in zoom-in-95 duration-200 relative max-h-[90vh] flex flex-col"
+          >
+            <button
+              onClick={() => setNotifyQueueItem(null)}
+              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-[#FCE4EC] flex items-center justify-center text-[#543E30] hover:bg-[#F6B8C6] transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">💬</span>
+              <div>
+                <h4 className="font-serif font-bold text-[#D06D80] text-base">
+                  ส่งข้อความแจ้งเตือนลูกค้า
+                </h4>
+                <p className="text-[11px] text-[#947765]">
+                  คุณ {notifyQueueItem.customer_name} · คิว #{notifyQueueItem.queue_no} ({notifyQueueItem.order_no})
+                </p>
+              </div>
+            </div>
+
+            {/* Customer Contact Badge */}
+            <div className="my-2 p-2.5 rounded-xl bg-[#FFFEFA] border border-[#F6B8C6]/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-[#D06D80]">ช่องทางติดต่อ:</span>
+                <span className="px-2 py-0.5 rounded-md bg-[#FFF8EC] text-[#543E30] font-semibold border border-[#F6B8C6]/30">
+                  {notifyQueueItem.contact_channel || 'LINE'}: {notifyQueueItem.contact_value || notifyQueueItem.contact_info || '-'}
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FCE4EC] text-[#D06D80]">
+                สถานะ: {notifyQueueItem.status}
+              </span>
+            </div>
+
+            {/* Message Textarea */}
+            <div className="flex-1 min-h-[160px] space-y-1.5 mb-3">
+              <label className="text-[11px] font-semibold text-[#543E30] block">
+                ข้อความที่จะส่งให้ลูกค้า (แก้ไขเพิ่มเติมได้ตามต้องการ):
+              </label>
+              <textarea
+                rows={7}
+                value={customNotifyMessage}
+                onChange={(e) => setCustomNotifyMessage(e.target.value)}
+                className="w-full text-xs font-mono p-3 rounded-xl border border-[#F6B8C6] bg-[#FFFEFA] focus:outline-hidden focus:ring-1 focus:ring-[#D06D80] leading-relaxed resize-y"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-2 border-t border-[#F6B8C6]/40">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 1-Click Launch button depending on channel */}
+                {(() => {
+                  const ch = (notifyQueueItem.contact_channel || '').toLowerCase();
+                  if (ch.includes('line')) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCustomerChat(notifyQueueItem, customNotifyMessage)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>เปิดแอป LINE ส่งข้อความทันที 🟢</span>
+                      </button>
+                    );
+                  }
+                  if (ch.includes('instagram') || ch.includes('ig')) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCustomerChat(notifyQueueItem, customNotifyMessage)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-[#E1306C] to-[#F56040] hover:brightness-105 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>เปิด IG @{notifyQueueItem.contact_value?.replace(/^@/, '')} (พร้อมคัดลอก) 📸</span>
+                      </button>
+                    );
+                  }
+                  if (ch.includes('facebook') || ch.includes('fb')) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCustomerChat(notifyQueueItem, customNotifyMessage)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>เปิด Facebook (พร้อมคัดลอก) 🔵</span>
+                      </button>
+                    );
+                  }
+                  if (ch.includes('phone') || ch.includes('เบอร์') || ch.includes('tel')) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCustomerChat(notifyQueueItem, customNotifyMessage)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-[#D06D80] hover:bg-[#c25e71] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        <span>ส่ง SMS หาเบอร์ลูกค้า 📱</span>
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCustomerChat(notifyQueueItem, customNotifyMessage)}
+                      className="flex-1 py-2 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>ส่งข้อความผ่าน LINE 🟢</span>
+                    </button>
+                  );
+                })()}
+
+                {/* Copy Text Button */}
+                <button
+                  type="button"
+                  onClick={() => handleCopyCustomerMessage(customNotifyMessage)}
+                  className="py-2 px-3.5 rounded-xl border border-[#F6B8C6] bg-[#FFFEFA] hover:bg-[#FCE4EC] text-[#543E30] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                  title="คัดลอกข้อความทั้งหมด"
+                >
+                  <Copy className="w-3.5 h-3.5 text-[#D06D80]" />
+                  <span>คัดลอกข้อความ 📋</span>
+                </button>
+              </div>
+
+              <p className="text-[10px] text-[#947765] text-center pt-1">
+                * เมื่อกดปุ่มส่ง ระบบจะคัดลอกข้อความลง Clipboard อัตโนมัติและเปิดหน้าต่างแชทให้คุณวางส่งได้ทันทีค่ะ
+              </p>
+            </div>
           </div>
         </div>
       )}
