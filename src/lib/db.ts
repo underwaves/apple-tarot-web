@@ -1358,3 +1358,39 @@ export async function addReview(review: { customer_name: string; rating: number;
   writeLocalDb(local);
   return newRev;
 }
+
+export async function saveReviews(reviews: Review[]): Promise<Review[]> {
+  if (isNeonConfigured) {
+    await neonSet('reviews', reviews);
+    try {
+      const local = readLocalDb();
+      local.reviews = reviews;
+      writeLocalDb(local);
+    } catch {}
+    return reviews;
+  }
+
+  const local = readLocalDb();
+  local.reviews = reviews;
+  writeLocalDb(local);
+  return reviews;
+}
+
+export async function deleteReview(reviewId: string): Promise<boolean> {
+  if (isNeonConfigured) {
+    let reviews = await neonGet<Review[]>('reviews', DEFAULT_STORE_DATA.reviews);
+    reviews = reviews.filter((r) => r.id !== reviewId);
+    await neonSet('reviews', reviews);
+    try {
+      const local = readLocalDb();
+      local.reviews = local.reviews.filter((r) => r.id !== reviewId);
+      writeLocalDb(local);
+    } catch {}
+    return true;
+  }
+
+  const local = readLocalDb();
+  local.reviews = local.reviews.filter((r) => r.id !== reviewId);
+  writeLocalDb(local);
+  return true;
+}

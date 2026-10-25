@@ -8,6 +8,7 @@ import {
   Category,
   StoreSettings,
   MusicTrack,
+  Review,
 } from '@/types';
 import { formatBaht, formatThaiDate, extractYouTubeId } from '@/lib/utils';
 import {
@@ -18,6 +19,7 @@ import {
   Package,
   Settings,
   Music,
+  Star,
   CheckCircle2,
   Plus,
   Trash2,
@@ -62,7 +64,7 @@ export default function AdminDashboard({
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'orders' | 'queues' | 'products' | 'settings' | 'music'
+    'overview' | 'orders' | 'queues' | 'products' | 'settings' | 'music' | 'reviews'
   >('overview');
 
   // Data states
@@ -71,6 +73,12 @@ export default function AdminDashboard({
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [musicTracks, setMusicTracks] = useState<MusicTrack[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [newReviewAuthor, setNewReviewAuthor] = useState('');
+  const [newReviewRating, setNewReviewRating] = useState(5);
+  const [newReviewComment, setNewReviewComment] = useState('');
+  const [isAddingReview, setIsAddingReview] = useState(false);
+  const [isSavingReviews, setIsSavingReviews] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [queueFilter, setQueueFilter] = useState<'all' | 'express'>('all');
 
@@ -184,6 +192,7 @@ export default function AdminDashboard({
         setCategories(storeData.data.categories || []);
         setSettings(storeData.data.settings || null);
         setMusicTracks(storeData.data.music_tracks || []);
+        setReviews(storeData.data.reviews || []);
       }
       if (ordersData.success) {
         setOrders(ordersData.orders || []);
@@ -242,6 +251,7 @@ export default function AdminDashboard({
           setCategories(storeData.data.categories || []);
           setSettings(storeData.data.settings || null);
           setMusicTracks(storeData.data.music_tracks || []);
+          setReviews(storeData.data.reviews || []);
         }
         if (ordersData.success) {
           setOrders(ordersData.orders || []);
@@ -605,6 +615,52 @@ export default function AdminDashboard({
     }
   };
 
+  const handleSaveReviews = async () => {
+    setIsSavingReviews(true);
+    try {
+      const res = await fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_reviews',
+          reviews,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showFeedback('บันทึกข้อมูลรีวิวสำเร็จเรียบร้อยแล้วค่ะ ✓');
+        if (onDataUpdated) onDataUpdated();
+      } else {
+        showFeedback(data.error || 'บันทึกรีวิวไม่สำเร็จ', true);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'บันทึกรีวิวไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+      showFeedback(msg, true);
+    } finally {
+      setIsSavingReviews(false);
+    }
+  };
+
+  const handleCreateReview = () => {
+    if (!newReviewAuthor.trim() || !newReviewComment.trim()) {
+      showFeedback('กรุณากรอกชื่อลูกค้าและข้อความรีวิวค่ะ', true);
+      return;
+    }
+    const rev: Review = {
+      id: 'rev-' + Date.now(),
+      customer_name: newReviewAuthor.trim(),
+      rating: newReviewRating,
+      comment: newReviewComment.trim(),
+      created_at: new Date().toISOString(),
+    };
+    setReviews([rev, ...reviews]);
+    setNewReviewAuthor('');
+    setNewReviewComment('');
+    setNewReviewRating(5);
+    setIsAddingReview(false);
+    showFeedback('เพิ่มรีวิวแล้ว (อย่าลืมกดปุ่ม "บันทึกรีวิว" ด้านบนขวานะคะ) ⭐');
+  };
+
   // Stats calculation
   const totalRevenue = orders
     .filter((o) => o.status === 'confirmed')
@@ -675,6 +731,7 @@ export default function AdminDashboard({
             { id: 'products' as const, label: 'สินค้า & หมวดหมู่', icon: <Package className="w-4 h-4" /> },
             { id: 'settings' as const, label: 'ตั้งค่าร้านค้า', icon: <Settings className="w-4 h-4" /> },
             { id: 'music' as const, label: 'จัดการเพลง', icon: <Music className="w-4 h-4" /> },
+            { id: 'reviews' as const, label: `จัดการรีวิว (${reviews.length})`, icon: <Star className="w-4 h-4" /> },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1814,6 +1871,262 @@ export default function AdminDashboard({
                       <Plus className="w-4 h-4" />
                       <span>+ เพิ่มเพลงใหม่</span>
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 7: REVIEWS MANAGEMENT */}
+              {activeTab === 'reviews' && (
+                <div className="space-y-4 max-w-2xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-serif text-lg font-bold text-[#D06D80] flex items-center gap-1.5">
+                        <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+                        <span>จัดการรีวิวจากลูกค้า (Customer Reviews)</span>
+                      </h4>
+                      <p className="text-xs text-[#947765]">
+                        จัดการ เพิ่ม แก้ไข และลบรีวิวที่แสดงบนหน้าเว็บให้ลูกค้าเห็น
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleSaveReviews}
+                      disabled={isSavingReviews}
+                      className="cta-btn py-2 px-4 text-xs font-semibold text-[#543E30] flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                    >
+                      {isSavingReviews ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      <span>บันทึกรีวิว</span>
+                    </button>
+                  </div>
+
+                  {/* Summary Stats & Add Button */}
+                  <div className="flex items-center justify-between p-3.5 bg-[#FFF8EC] rounded-xl border border-[#F6B8C6]/60 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#F6B8C6]/30 flex items-center justify-center text-lg">
+                        ⭐️
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-[#543E30]">
+                          รีวิวทั้งหมด {reviews.length} รายการ
+                        </div>
+                        <div className="text-[11px] text-[#947765] flex items-center gap-1">
+                          <span>คะแนนเฉลี่ย:</span>
+                          <span className="font-bold text-amber-600">
+                            {reviews.length > 0
+                              ? (
+                                  reviews.reduce(
+                                    (acc, r) => acc + (Number(r.rating) || 5),
+                                    0
+                                  ) / reviews.length
+                                ).toFixed(1)
+                              : '5.0'}{' '}
+                            / 5.0
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingReview(!isAddingReview)}
+                      className="cta-btn py-1.5 px-3 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{isAddingReview ? 'ปิดฟอร์ม' : 'เพิ่มรีวิวใหม่'}</span>
+                    </button>
+                  </div>
+
+                  {/* Add New Review Form */}
+                  {isAddingReview && (
+                    <div className="p-4 bg-[#FFFEFA] rounded-xl border-2 border-[#F6B8C6] space-y-3 shadow-md animate-in fade-in duration-200">
+                      <h5 className="font-bold text-xs text-[#D06D80] flex items-center gap-1">
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>เขียน/เพิ่มรีวิวหน้าร้านใหม่</span>
+                      </h5>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#543E30] mb-1">
+                            ชื่อลูกค้า:
+                          </label>
+                          <input
+                            type="text"
+                            value={newReviewAuthor}
+                            onChange={(e) => setNewReviewAuthor(e.target.value)}
+                            placeholder="เช่น คุณแพรว, ลูกค้าประจำ"
+                            className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-[#F6B8C6]/50 bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#543E30] mb-1">
+                            จำนวนดาว (1-5 ดาว):
+                          </label>
+                          <div className="flex items-center gap-1 py-1">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => setNewReviewRating(s)}
+                                className="p-1 hover:scale-110 transition cursor-pointer"
+                              >
+                                <Star
+                                  className={`w-5 h-5 ${
+                                    s <= newReviewRating
+                                      ? 'text-amber-400 fill-amber-400'
+                                      : 'text-stone-300'
+                                  }`}
+                                />
+                              </button>
+                            ))}
+                            <span className="text-xs font-bold text-amber-600 ml-2">
+                              {newReviewRating} ดาว
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#543E30] mb-1">
+                          ข้อความรีวิว:
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={newReviewComment}
+                          onChange={(e) => setNewReviewComment(e.target.value)}
+                          placeholder="พิมพ์ข้อความรีวิว หรือความประทับใจของลูกค้า..."
+                          className="w-full text-xs p-2.5 rounded-lg border border-[#F6B8C6]/50 bg-white resize-none"
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddingReview(false);
+                            setNewReviewAuthor('');
+                            setNewReviewComment('');
+                          }}
+                          className="secondary-btn py-1.5 px-3 text-xs cursor-pointer"
+                        >
+                          ยกเลิก
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCreateReview}
+                          className="cta-btn py-1.5 px-4 text-xs font-semibold cursor-pointer"
+                        >
+                          + เพิ่มเข้ารายการ
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Review Cards List */}
+                  <div className="space-y-3">
+                    {reviews.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-[#947765] bg-[#FFF8EC] rounded-xl border border-dashed border-[#F6B8C6]">
+                        ยังไม่มีรีวิวในระบบ สามารถกด "เพิ่มรีวิวใหม่" ด้านบนได้เลยค่ะ
+                      </div>
+                    ) : (
+                      reviews.map((rev, idx) => (
+                        <div
+                          key={rev.id || idx}
+                          className="p-3.5 bg-[#FFFEFA] rounded-xl border border-[#FCE4EC] space-y-2.5 text-xs shadow-sm hover:border-[#F6B8C6] transition"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#FCE4EC] pb-2">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="text-[11px] font-bold text-[#947765]">
+                                #{idx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={rev.customer_name}
+                                onChange={(e) => {
+                                  const next = [...reviews];
+                                  next[idx].customer_name = e.target.value;
+                                  setReviews(next);
+                                }}
+                                placeholder="ชื่อลูกค้า"
+                                className="font-semibold text-xs py-1 px-2 rounded border border-transparent hover:border-[#F6B8C6]/40 focus:border-[#F6B8C6] bg-transparent"
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between sm:justify-end gap-3">
+                              {/* Star selector */}
+                              <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <button
+                                    key={s}
+                                    type="button"
+                                    onClick={() => {
+                                      const next = [...reviews];
+                                      next[idx].rating = s;
+                                      setReviews(next);
+                                    }}
+                                    className="p-0.5 hover:scale-110 transition cursor-pointer"
+                                    title={`ให้ ${s} ดาว`}
+                                  >
+                                    <Star
+                                      className={`w-3.5 h-3.5 ${
+                                        s <= (rev.rating || 5)
+                                          ? 'text-amber-400 fill-amber-400'
+                                          : 'text-stone-300'
+                                      }`}
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+
+                              <span className="text-[10px] text-[#947765]">
+                                {rev.created_at ? formatThaiDate(rev.created_at) : 'เพิ่งเพิ่ม'}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: 'ยืนยันการลบรีวิว',
+                                    message: `ต้องการลบรีวิวของ "${rev.customer_name || 'ลูกค้า'}" หรือไม่?`,
+                                    confirmText: 'ลบรีวิว',
+                                    cancelText: 'ยกเลิก',
+                                    variant: 'danger',
+                                    icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+                                    onConfirm: () => {
+                                      setReviews(reviews.filter((_, i) => i !== idx));
+                                      showFeedback('ลบรีวิวแล้ว (อย่าลืมกดปุ่ม "บันทึกรีวิว" นะคะ)');
+                                    },
+                                  });
+                                }}
+                                className="text-[#D06D80] p-1.5 hover:bg-[#FCE4EC] rounded cursor-pointer transition"
+                                title="ลบรีวิว"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Review comment editor */}
+                          <div>
+                            <textarea
+                              rows={2}
+                              value={rev.comment}
+                              onChange={(e) => {
+                                const next = [...reviews];
+                                next[idx].comment = e.target.value;
+                                setReviews(next);
+                              }}
+                              placeholder="ข้อความรีวิว..."
+                              className="w-full text-xs p-2 rounded-lg border border-[#FCE4EC] hover:border-[#F6B8C6]/50 focus:border-[#F6B8C6] bg-[#FFF8EC]/30 resize-none"
+                            />
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

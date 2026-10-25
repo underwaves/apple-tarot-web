@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getStoreData, saveCategories, saveStoreSettings, saveMusicTracks } from '@/lib/db';
+import { getStoreData, saveCategories, saveStoreSettings, saveMusicTracks, saveReviews } from '@/lib/db';
 import { verifyAdminSession } from '@/lib/auth';
 
 export async function GET() {
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { action, categories, settings, music_tracks } = body;
+    const { action, categories, settings, music_tracks, reviews } = body;
 
     if (action === 'save_categories' && categories) {
       const saved = await saveCategories(categories);
@@ -38,6 +38,12 @@ export async function POST(req: Request) {
     if (action === 'save_music') {
       const tracksToSave = Array.isArray(music_tracks) ? music_tracks : [];
       const saved = await saveMusicTracks(tracksToSave);
+      return NextResponse.json({ success: true, data: saved });
+    }
+
+    if (action === 'save_reviews') {
+      const reviewsToSave = Array.isArray(reviews) ? reviews : [];
+      const saved = await saveReviews(reviewsToSave);
       return NextResponse.json({ success: true, data: saved });
     }
 
