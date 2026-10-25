@@ -26,12 +26,12 @@ export default function PaymentModal({
   settings,
 }: PaymentModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const [qrMode, setQrMode] = useState<'promptpay' | 'kbank' | 'truemoney'>(() => {
-    if (typeof window === 'undefined') return 'promptpay';
+  const [qrMode, setQrMode] = useState<'kbank' | 'promptpay' | 'truemoney'>(() => {
+    if (typeof window === 'undefined') return 'kbank';
     const p = new URLSearchParams(window.location.search).get('preview');
-    if (p === 'payment_kbank') return 'kbank';
+    if (p === 'payment_promptpay') return 'promptpay';
     if (p === 'payment_truemoney') return 'truemoney';
-    return 'promptpay';
+    return 'kbank';
   });
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -110,17 +110,6 @@ export default function PaymentModal({
           <div className="flex items-center justify-center gap-1.5 p-1 bg-[#FFF8EC] rounded-xl border border-[#F6B8C6]/50 text-xs w-full">
             <button
               type="button"
-              onClick={() => setQrMode('promptpay')}
-              className={`flex-1 py-1.5 px-2 rounded-lg font-semibold transition cursor-pointer text-[11px] ${
-                qrMode === 'promptpay'
-                  ? 'bg-[#F6B8C6] text-[#543E30] shadow-xs'
-                  : 'text-[#947765] hover:text-[#543E30]'
-              }`}
-            >
-              พร้อมเพย์ (ใส่ยอด)
-            </button>
-            <button
-              type="button"
               onClick={() => setQrMode('kbank')}
               className={`flex-1 py-1.5 px-2 rounded-lg font-semibold transition cursor-pointer text-[11px] ${
                 qrMode === 'kbank'
@@ -128,7 +117,18 @@ export default function PaymentModal({
                   : 'text-[#947765] hover:text-[#543E30]'
               }`}
             >
-              K+ กสิกร
+              K+ กสิกร (แนะนำ)
+            </button>
+            <button
+              type="button"
+              onClick={() => setQrMode('promptpay')}
+              className={`flex-1 py-1.5 px-2 rounded-lg font-semibold transition cursor-pointer text-[11px] ${
+                qrMode === 'promptpay'
+                  ? 'bg-[#F6B8C6] text-[#543E30] shadow-xs'
+                  : 'text-[#947765] hover:text-[#543E30]'
+              }`}
+            >
+              พร้อมเพย์ (QR ตามยอด)
             </button>
             <button
               type="button"
@@ -190,30 +190,6 @@ export default function PaymentModal({
 
           {/* Account Details Box */}
           <div className="w-full bg-[#FFFEFA] border border-[#FCE4EC] rounded-2xl p-3.5 text-left space-y-2 text-xs shadow-xs">
-            {/* PromptPay */}
-            <div className="flex justify-between items-center text-[#947765]">
-              <span>พร้อมเพย์:</span>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-[#543E30] text-sm">
-                  {settings.promptpay_id || '096-889-5279'}
-                </span>
-                <button
-                  onClick={() => copyText(settings.promptpay_id || '0968895279', 'promptpay')}
-                  className="py-0.5 px-2 rounded-lg bg-[#FCE4EC] text-[#543E30] hover:bg-[#F6B8C6] transition flex items-center gap-1 cursor-pointer"
-                  title="คัดลอก"
-                >
-                  {copiedField === 'promptpay' ? (
-                    <Check className="w-3.5 h-3.5 text-[#7D946D]" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                  <span className="text-[10px] font-semibold">
-                    {copiedField === 'promptpay' ? 'คัดลอกแล้ว' : 'คัดลอก'}
-                  </span>
-                </button>
-              </div>
-            </div>
-
             {/* KBank Account */}
             <div className="flex justify-between items-center text-[#947765]">
               <span>กสิกรไทย (KBANK):</span>
@@ -233,6 +209,30 @@ export default function PaymentModal({
                   )}
                   <span className="text-[10px] font-semibold">
                     {copiedField === 'kbank' ? 'คัดลอกแล้ว' : 'คัดลอก'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* PromptPay */}
+            <div className="flex justify-between items-center text-[#947765]">
+              <span>พร้อมเพย์:</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-[#543E30] text-sm">
+                  {settings.promptpay_id || '096-889-5279'}
+                </span>
+                <button
+                  onClick={() => copyText(settings.promptpay_id || '0968895279', 'promptpay')}
+                  className="py-0.5 px-2 rounded-lg bg-[#FCE4EC] text-[#543E30] hover:bg-[#F6B8C6] transition flex items-center gap-1 cursor-pointer"
+                  title="คัดลอก"
+                >
+                  {copiedField === 'promptpay' ? (
+                    <Check className="w-3.5 h-3.5 text-[#7D946D]" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                  <span className="text-[10px] font-semibold">
+                    {copiedField === 'promptpay' ? 'คัดลอกแล้ว' : 'คัดลอก'}
                   </span>
                 </button>
               </div>
