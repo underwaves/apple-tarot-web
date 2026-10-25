@@ -362,7 +362,7 @@ export default function AdminDashboard({
 
             <input
               type="password"
-              placeholder="รหัสผ่านหลังบ้าน (apple2026)"
+              placeholder="รหัสผ่านหลังบ้าน"
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
               className="text-center font-mono text-sm tracking-wider"
