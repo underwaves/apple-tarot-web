@@ -10,6 +10,7 @@ import {
   MusicTrack,
   Review,
   ThemeColors,
+  StoreContact,
 } from '@/types';
 import { formatBaht, formatThaiDate, extractYouTubeId } from '@/lib/utils';
 import { THEME_PRESETS, DEFAULT_THEME_COLORS, ThemePreset } from '@/lib/theme';
@@ -41,6 +42,12 @@ import {
   Palette,
   Sparkles,
   Check,
+  MessageCircle,
+  ExternalLink,
+  Globe,
+  Phone,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 import { compressImageToDataUrl } from '@/lib/image-client';
@@ -73,7 +80,7 @@ export default function AdminDashboard({
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'orders' | 'queues' | 'products' | 'settings' | 'theme' | 'music' | 'reviews'
+    'overview' | 'orders' | 'queues' | 'products' | 'settings' | 'contacts' | 'theme' | 'music' | 'reviews'
   >('overview');
 
   // Data states
@@ -1250,6 +1257,356 @@ export default function AdminDashboard({
     );
   };
 
+  // Render Contact Channels Management Panel
+  const renderContactsPanel = () => {
+    if (!settings) return null;
+    const socials: StoreContact[] = settings.socials || [];
+
+    const handleAddContact = (presetType?: string) => {
+      let defaultType = presetType || 'LINE';
+      let defaultName = 'LINE Official';
+      let defaultUrl = 'https://lin.ee/';
+
+      if (presetType === 'Instagram') {
+        defaultName = '@auralune_a';
+        defaultUrl = 'https://instagram.com/';
+      } else if (presetType === 'Facebook') {
+        defaultName = 'Auralune ดูดวงไพ่ทาโรต์';
+        defaultUrl = 'https://facebook.com/';
+      } else if (presetType === 'TikTok') {
+        defaultName = '@tiktok_shop';
+        defaultUrl = 'https://tiktok.com/@';
+      } else if (presetType === 'Phone') {
+        defaultType = 'เบอร์โทรศัพท์';
+        defaultName = '096-889-xxxx';
+        defaultUrl = 'tel:0968895279';
+      } else if (presetType === 'X') {
+        defaultType = 'X (Twitter)';
+        defaultName = '@twitter_handle';
+        defaultUrl = 'https://x.com/';
+      }
+
+      const nextSocials: StoreContact[] = [
+        ...socials,
+        { type: defaultType, name: defaultName, url: defaultUrl },
+      ];
+      setSettings({ ...settings, socials: nextSocials });
+      showFeedback(`เพิ่มช่องทาง ${defaultType} เรียบร้อยแล้วค่ะ อย่าลืมกดบันทึกนะคะ`);
+    };
+
+    const handleUpdateContact = (index: number, field: keyof StoreContact, value: string) => {
+      const nextSocials = [...socials];
+      nextSocials[index] = { ...nextSocials[index], [field]: value };
+      setSettings({ ...settings, socials: nextSocials });
+    };
+
+    const handleDeleteContact = (index: number) => {
+      const target = socials[index];
+      setConfirmDialog({
+        isOpen: true,
+        title: 'ยืนยันการลบช่องทางติดต่อ',
+        message: `ต้องการลบช่องทาง "${target.type} (${target.name || target.url})" ออกจากร้านค้าหรือไม่?`,
+        confirmText: 'ลบช่องทาง',
+        cancelText: 'ยกเลิก',
+        variant: 'danger',
+        icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+        onConfirm: () => {
+          const nextSocials = socials.filter((_, i) => i !== index);
+          setSettings({ ...settings, socials: nextSocials });
+          showFeedback('ลบช่องทางติดต่อเรียบร้อยแล้วค่ะ');
+        },
+      });
+    };
+
+    const handleMoveContact = (index: number, direction: 'up' | 'down') => {
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= socials.length) return;
+      const list = [...socials];
+      const temp = list[index];
+      list[index] = list[targetIndex];
+      list[targetIndex] = temp;
+      setSettings({ ...settings, socials: list });
+    };
+
+    const renderContactIcon = (type: string) => {
+      const t = (type || '').toLowerCase();
+      if (t.includes('line')) {
+        return (
+          <svg className="w-5 h-5 fill-[#06c755]" viewBox="0 0 24 24">
+            <path d="M24 10.3c0-4.6-4.5-8.3-10-8.3S4 5.7 4 10.3c0 4.1 3.6 7.5 8.5 8.1.3.1.8.2.9.6.1.3.1.7 0 1-.1.4-.4 1.4-.5 1.7-.1.4-.3 1.2.7.7 1-.6 5.4-3.2 7.4-5.5 2-2.1 3-4.1 3-6.1z" />
+          </svg>
+        );
+      }
+      if (t.includes('insta')) {
+        return (
+          <svg className="w-5 h-5 fill-[#e1306c]" viewBox="0 0 24 24">
+            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+          </svg>
+        );
+      }
+      if (t.includes('face')) {
+        return (
+          <svg className="w-5 h-5 fill-[#1877f2]" viewBox="0 0 24 24">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+          </svg>
+        );
+      }
+      if (t.includes('tiktok')) {
+        return (
+          <svg className="w-5 h-5 fill-black" viewBox="0 0 24 24">
+            <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-1.01-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.24 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" />
+          </svg>
+        );
+      }
+      if (t.includes('twitter') || t.includes(' x') || t === 'x') {
+        return (
+          <svg className="w-5 h-5 fill-black" viewBox="0 0 24 24">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+          </svg>
+        );
+      }
+      if (t.includes('phone') || t.includes('โทร')) {
+        return <Phone className="w-5 h-5 text-[#2E7D32]" />;
+      }
+      return <Globe className="w-5 h-5 text-[#A8B99A]" />;
+    };
+
+    return (
+      <div className="space-y-4 max-w-2xl pb-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-serif text-lg font-bold text-[#D06D80] flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-[#D06D80]" />
+              <span>จัดการช่องทางติดต่อร้านค้า (Contact Channels)</span>
+            </h4>
+            <p className="text-xs text-[#947765]">
+              แก้ไขหรือเพิ่มช่องทางที่ลูกค้าจะเห็นเมื่อกดปุ่ม &quot;ติดต่อร้านค้า&quot; (LINE, IG, Facebook, TikTok ฯลฯ)
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleAddContact()}
+              className="py-2 px-3 rounded-xl border border-[#F6B8C6] text-xs font-semibold text-[#543E30] hover:bg-[#FCE4EC] transition cursor-pointer flex items-center gap-1"
+            >
+              <Plus className="w-4 h-4 text-[#D06D80]" />
+              <span>เพิ่มช่องทาง</span>
+            </button>
+            <button
+              onClick={handleSaveSettings}
+              className="cta-btn py-2 px-4 text-xs font-semibold text-[#543E30] flex items-center gap-1.5 cursor-pointer shadow-md"
+            >
+              <Save className="w-4 h-4" />
+              <span>บันทึกช่องทางติดต่อ</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Add Presets Bar */}
+        <div className="bg-[#FFFEFA] p-3 rounded-xl border border-[#F6B8C6] shadow-sm flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-[#947765] font-semibold flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5 text-[#D06D80]" />
+            <span>เพิ่มด่วน:</span>
+          </span>
+          {[
+            { label: '+ LINE', type: 'LINE' },
+            { label: '+ Instagram', type: 'Instagram' },
+            { label: '+ Facebook', type: 'Facebook' },
+            { label: '+ TikTok', type: 'TikTok' },
+            { label: '+ เบอร์โทรศัพท์', type: 'Phone' },
+            { label: '+ X (Twitter)', type: 'X' },
+          ].map((preset) => (
+            <button
+              key={preset.type}
+              type="button"
+              onClick={() => handleAddContact(preset.type)}
+              className="px-2.5 py-1 rounded-lg bg-[#FFF8EC] border border-[#F6B8C6] hover:bg-[#FCE4EC] text-[#543E30] font-medium transition cursor-pointer text-xs"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Contacts List */}
+        <div className="space-y-3">
+          {socials.length === 0 ? (
+            <div className="bg-[#FFFEFA] p-8 rounded-2xl border border-dashed border-[#F6B8C6] text-center space-y-3">
+              <span className="text-3xl">💬</span>
+              <p className="text-xs text-[#947765]">ยังไม่มีข้อมูลช่องทางติดต่อร้านค้า</p>
+              <button
+                type="button"
+                onClick={() => handleAddContact()}
+                className="cta-btn py-2 px-4 text-xs font-bold text-[#543E30] inline-flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>เพิ่มช่องทางแรก</span>
+              </button>
+            </div>
+          ) : (
+            socials.map((social, index) => (
+              <div
+                key={index}
+                className="bg-[#FFFEFA] p-3.5 rounded-2xl border border-[#F6B8C6] shadow-xs space-y-3 transition hover:shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-[#FCE4EC] pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-[#FFF8EC] border border-[#C9DDB8] flex items-center justify-center shrink-0">
+                      {renderContactIcon(social.type)}
+                    </div>
+                    <span className="font-bold text-xs text-[#543E30]">
+                      ช่องทางที่ {index + 1}: {social.type || 'ช่องทางใหม่'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => handleMoveContact(index, 'up')}
+                      title="เลื่อนขึ้น"
+                      className="p-1 text-[#947765] hover:text-[#543E30] hover:bg-[#FCE4EC] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === socials.length - 1}
+                      onClick={() => handleMoveContact(index, 'down')}
+                      title="เลื่อนลง"
+                      className="p-1 text-[#947765] hover:text-[#543E30] hover:bg-[#FCE4EC] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                    {social.url && (
+                      <a
+                        href={social.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="ทดสอบเปิดลิงก์"
+                        className="p-1 text-[#0284c7] hover:bg-[#e0f2fe] rounded cursor-pointer ml-1"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteContact(index)}
+                      title="ลบช่องทางนี้"
+                      className="p-1 text-[#D06D80] hover:bg-[#FCE4EC] rounded cursor-pointer ml-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#543E30] block mb-1">
+                      ประเภทช่องทาง (Platform)
+                    </label>
+                    <input
+                      type="text"
+                      value={social.type}
+                      placeholder="เช่น LINE, Instagram, Facebook"
+                      onChange={(e) => handleUpdateContact(index, 'type', e.target.value)}
+                      className="text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#543E30] block mb-1">
+                      ชื่อที่แสดง / ไอดี (Display Name)
+                    </label>
+                    <input
+                      type="text"
+                      value={social.name}
+                      placeholder="เช่น @auralune_a, LINE Official"
+                      onChange={(e) => handleUpdateContact(index, 'name', e.target.value)}
+                      className="text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#543E30] block mb-1">
+                      ลิงก์ปลายทาง (URL / tel:)
+                    </label>
+                    <input
+                      type="text"
+                      value={social.url}
+                      placeholder="https://... หรือ tel:..."
+                      onChange={(e) => handleUpdateContact(index, 'url', e.target.value)}
+                      className="text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Live Customer Modal Preview Card */}
+        {socials.length > 0 && (
+          <div className="bg-[#FFFEFA] p-4 rounded-2xl border border-[#F6B8C6] shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h5 className="font-bold text-sm text-[#543E30] flex items-center gap-1.5">
+                <Eye className="w-4 h-4 text-[#D06D80]" />
+                <span>ตัวอย่างหน้าต่างติดต่อที่ลูกค้าจะเห็น (Live Modal Preview)</span>
+              </h5>
+              <span className="text-[11px] text-[#947765]">อัปเดตตามที่พิมพ์ทันที</span>
+            </div>
+
+            <div className="bg-[#FFF8EC] p-4 rounded-2xl border border-[#F6B8C6]/50 max-w-sm mx-auto shadow-inner space-y-2.5">
+              <div className="text-center pb-2 border-b border-[#F6B8C6]/30">
+                <span className="text-xl">💬</span>
+                <h4 className="font-bold text-sm text-[#D06D80]">
+                  ติดต่อร้าน {settings.shop_name || 'Auralune'}
+                </h4>
+                <p className="text-[10px] text-[#947765]">
+                  สามารถทักแชทสอบถามรายละเอียดหรือแจ้งชำระเงินได้ตลอดเวลาค่ะ
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {socials.map((social, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2.5 rounded-xl bg-white border border-[#F6B8C6]/60 flex items-center justify-between shadow-2xs"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-[#FFF8EC] flex items-center justify-center border border-[#C9DDB8]">
+                        {renderContactIcon(social.type)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-xs text-[#543E30] block">
+                          {social.type || 'ช่องทางติดต่อ'}
+                        </span>
+                        <span className="text-[10px] text-[#947765] block truncate max-w-[170px]">
+                          {social.name || social.url || '-'}
+                        </span>
+                      </div>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-[#A8B99A]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={handleSaveSettings}
+                className="cta-btn py-2.5 px-6 text-xs font-bold text-[#543E30] flex items-center gap-2 cursor-pointer shadow-md"
+              >
+                <Save className="w-4 h-4" />
+                <span>กดบันทึกช่องทางติดต่อทั้งหมด</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Stats calculation
   const totalRevenue = orders
     .filter((o) => o.status === 'confirmed')
@@ -1347,6 +1704,7 @@ export default function AdminDashboard({
             },
             { id: 'products' as const, label: 'สินค้า & หมวดหมู่', icon: <Package className="w-4 h-4" /> },
             { id: 'settings' as const, label: 'ตั้งค่าร้านค้า', icon: <Settings className="w-4 h-4" /> },
+            { id: 'contacts' as const, label: 'ช่องทางติดต่อ 💬', icon: <MessageCircle className="w-4 h-4" /> },
             { id: 'theme' as const, label: 'ธีม & สีร้านค้า 🎨', icon: <Palette className="w-4 h-4" /> },
             { id: 'music' as const, label: 'จัดการเพลง', icon: <Music className="w-4 h-4" /> },
             { id: 'reviews' as const, label: `จัดการรีวิว (${reviews.length})`, icon: <Star className="w-4 h-4" /> },
@@ -2213,6 +2571,29 @@ export default function AdminDashboard({
                     </button>
                   </div>
 
+                  {/* Contact Channels Quick Card */}
+                  <div className="bg-[#FFFEFA] p-4 rounded-xl border border-[#F6B8C6] text-xs shadow-sm flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl">💬</span>
+                      <div>
+                        <h5 className="font-bold text-sm text-[#D06D80]">
+                          ช่องทางติดต่อร้านค้า (Socials)
+                        </h5>
+                        <p className="text-[11px] text-[#947765]">
+                          จัดการ LINE, Instagram, Facebook, TikTok, เบอร์โทร สำหรับให้ลูกค้าติดต่อ
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('contacts')}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#F6B8C6] to-[#FCE4EC] hover:brightness-95 text-[#543E30] text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer shrink-0"
+                    >
+                      <MessageCircle className="w-4 h-4 text-[#D06D80]" />
+                      <span>จัดการช่องทางติดต่อ ✨</span>
+                    </button>
+                  </div>
+
                   <div className="space-y-3 bg-[#FFFEFA] p-4 rounded-xl border border-[#F6B8C6] text-xs shadow-sm">
                     <div>
                       <label className="text-[11px] text-[#543E30] font-medium block mb-1">
@@ -2577,6 +2958,9 @@ export default function AdminDashboard({
 
               {/* TAB: THEME & COLOR CUSTOMIZER */}
               {activeTab === 'theme' && renderThemePanel()}
+
+              {/* TAB: CONTACT CHANNELS */}
+              {activeTab === 'contacts' && renderContactsPanel()}
 
               {/* TAB 6: MUSIC MANAGEMENT */}
               {activeTab === 'music' && (
