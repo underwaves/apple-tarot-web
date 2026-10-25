@@ -28,6 +28,8 @@ import {
   Pause,
   Upload,
   LogOut,
+  Camera,
+  ImageIcon,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -68,6 +70,49 @@ export default function AdminDashboard({
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
   const [isUploadingMusic, setIsUploadingMusic] = useState(false);
   const testAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const bannerFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const avatarFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const handleImageUpload = async (
+    file: File,
+    type: 'banner' | 'avatar'
+  ) => {
+    const isBanner = type === 'banner';
+    if (isBanner) setUploadingBanner(true);
+    else setUploadingAvatar(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', type);
+
+      const res = await fetch('/api/upload/image', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'อัปโหลดรูปภาพไม่สำเร็จ');
+      }
+
+      setSettings((prev) =>
+        prev
+          ? {
+              ...prev,
+              [isBanner ? 'banner_url' : 'avatar_url']: data.url,
+            }
+          : prev
+      );
+      showFeedback(`อัปโหลดรูปภาพ${isBanner ? 'แบนเนอร์' : 'โปรไฟล์'}เรียบร้อยแล้ว ✨`);
+    } catch (err: unknown) {
+      showFeedback(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอัปโหลด', true);
+    } finally {
+      if (isBanner) setUploadingBanner(false);
+      else setUploadingAvatar(false);
+    }
+  };
 
   // Notification message
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; isError?: boolean } | null>(null);
@@ -1198,32 +1243,147 @@ export default function AdminDashboard({
                     </div>
 
                     <div className="pt-2 border-t border-[#F6B8C6]/30">
-                      <h5 className="font-semibold text-sm text-[#D06D80] mb-2">
-                        🖼️ ลิงก์รูปภาพ
+                      <h5 className="font-semibold text-sm text-[#D06D80] mb-3 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <ImageIcon className="w-4 h-4 text-[#D06D80]" />
+                          <span>รูปภาพร้านค้า (อัปโหลดเองได้ 📸)</span>
+                        </span>
+                        <span className="text-[11px] font-normal text-[#947765]">
+                          รองรับ .jpg, .png, .webp
+                        </span>
                       </h5>
-                      <div className="space-y-2">
-                        <div>
-                          <label className="text-[11px] text-[#543E30] font-medium block mb-1">
-                            URL รูปภาพแบนเนอร์
+
+                      <div className="space-y-4">
+                        {/* Banner Image */}
+                        <div className="bg-[#FFF8EC]/60 p-3 rounded-2xl border border-[#F6B8C6]/50">
+                          <label className="text-xs text-[#543E30] font-semibold block mb-1.5">
+                            🌄 รูปภาพแบนเนอร์ร้าน (Banner)
                           </label>
+
+                          {/* Banner Preview */}
+                          {settings.banner_url && (
+                            <div className="relative w-full h-28 sm:h-36 rounded-xl overflow-hidden mb-2.5 border border-[#F6B8C6] shadow-xs">
+                              <Image
+                                src={settings.banner_url}
+                                alt="Banner Preview"
+                                fill
+                                unoptimized
+                                className="object-cover"
+                              />
+                            </div>
+                          )}
+
+                          <input
+                            type="file"
+                            ref={bannerFileInputRef}
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleImageUpload(file, 'banner');
+                            }}
+                          />
+
+                          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                            <button
+                              type="button"
+                              onClick={() => bannerFileInputRef.current?.click()}
+                              disabled={uploadingBanner}
+                              className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#F6B8C6] to-[#FCE4EC] hover:brightness-95 text-[#543E30] text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
+                            >
+                              {uploadingBanner ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>กำลังอัปโหลด...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Camera className="w-3.5 h-3.5 text-[#D06D80]" />
+                                  <span>📁 เลือกรูปแบนเนอร์จากเครื่อง</span>
+                                </>
+                              )}
+                            </button>
+                            <span className="text-[11px] text-[#947765] text-center sm:text-left">
+                              หรือใส่ลิงก์ภาพโดยตรง
+                            </span>
+                          </div>
+
                           <input
                             type="text"
+                            placeholder="https://... หรือ /uploads/images/..."
                             value={settings.banner_url}
                             onChange={(e) =>
                               setSettings({ ...settings, banner_url: e.target.value })
                             }
+                            className="mt-2 text-xs font-mono"
                           />
                         </div>
-                        <div>
-                          <label className="text-[11px] text-[#543E30] font-medium block mb-1">
-                            URL รูปภาพโปรไฟล์ร้าน
+
+                        {/* Avatar Image */}
+                        <div className="bg-[#FFF8EC]/60 p-3 rounded-2xl border border-[#F6B8C6]/50">
+                          <label className="text-xs text-[#543E30] font-semibold block mb-1.5">
+                            🌸 รูปภาพโปรไฟล์ร้าน (Avatar)
                           </label>
+
+                          <div className="flex items-center gap-3 mb-2.5">
+                            {/* Avatar Preview */}
+                            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-[#F6B8C6] shadow-xs bg-white shrink-0">
+                              {settings.avatar_url ? (
+                                <Image
+                                  src={settings.avatar_url}
+                                  alt="Avatar Preview"
+                                  fill
+                                  unoptimized
+                                  className="object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[#D06D80] text-xs">
+                                  ไม่มีรูป
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-1">
+                              <input
+                                type="file"
+                                ref={avatarFileInputRef}
+                                accept="image/png,image/jpeg,image/webp,image/gif"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleImageUpload(file, 'avatar');
+                                }}
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() => avatarFileInputRef.current?.click()}
+                                disabled={uploadingAvatar}
+                                className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#C9DDB8] to-[#FFF8EC] hover:brightness-95 text-[#543E30] text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50 w-full sm:w-auto"
+                              >
+                                {uploadingAvatar ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>กำลังอัปโหลด...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Camera className="w-3.5 h-3.5 text-[#7D946D]" />
+                                    <span>📁 เลือกรูปโปรไฟล์จากเครื่อง</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
                           <input
                             type="text"
+                            placeholder="https://... หรือ /uploads/images/..."
                             value={settings.avatar_url}
                             onChange={(e) =>
                               setSettings({ ...settings, avatar_url: e.target.value })
                             }
+                            className="text-xs font-mono"
                           />
                         </div>
                       </div>

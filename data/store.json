@@ -1,7 +1,7 @@
 {
   "settings": {
     "shop_name": "Auralune",
-    "shop_title": "Auralune · ดูดวงไพ่ทาโรต์พยากรณ์",
+    "shop_title": "Auralune",
     "shop_subtitle": "เปิดไพ่ฮีลใจ แม่นยำ ตรงไปตรงมา · คำถามทั่วไป คำถามเจาะจง ดูดวงแบบโทรสด",
     "banner_url": "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1200&q=80",
     "avatar_url": "https://images.unsplash.com/photo-1568644396922-5c3bfae12521?auto=format&fit=crop&w=300&q=80",
@@ -49,7 +49,7 @@
   "categories": [
     {
       "id": "cat-1",
-      "name": "🔮 ดูดวงตอบคำถาม (ไพ่ทาโรต์ Auralune)",
+      "name": "🔮 ดูดวงตอบคำถาม (ไพ่ทาโรต์)",
       "description": "เปิดไพ่ตอบตรงประเด็น ชัดเจน พร้อมคำแนะนำและทางออกที่ดีที่สุด",
       "sort_order": 1,
       "product_type": "fortune",
@@ -57,27 +57,27 @@
         {
           "id": "pkg-1",
           "category_id": "cat-1",
-          "name": "คำถามทั่วไป (เปิดไพ่ทาโรต์)",
+          "name": "คำถามทั่วไป",
           "description": "ถามเรื่องทั่วไป 1 ข้อ ตอบกระชับ ชัดเจน พร้อมคำแนะนำ",
           "price": 15,
-          "badge": "เริ่มต้น ✨",
+          "badge": "15.-",
           "is_active": true,
           "product_type": "fortune"
         },
         {
           "id": "pkg-2",
           "category_id": "cat-1",
-          "name": "คำถามเจาะจง (เปิดไพ่เจาะลึก)",
+          "name": "คำถามเจาะจง",
           "description": "ถามเรื่องที่อยากรู้เจาะจง 1 เรื่อง ลึกถึงสาเหตุ แนวโน้ม และแนวทางแก้ไข",
           "price": 25,
-          "badge": "ยอดฮิต 🍎",
+          "badge": "25.-",
           "is_active": true,
           "product_type": "fortune"
         },
         {
           "id": "pkg-3",
           "category_id": "cat-1",
-          "name": "ลัดคิวแบบเจาะจง (ด่วนพิเศษ ⚡)",
+          "name": "ลัดคิวแบบเจาะจง",
           "description": "ถามคำถามเจาะจง พร้อมสิทธิ์ลัดคิวพิเศษ (เรทเดียว 32 บาท) ได้รับคำทำนายด่วนภายใน 12-24 ชั่วโมง",
           "price": 32,
           "badge": "⚡ ลัดคิว 32.-",
@@ -96,62 +96,32 @@
         {
           "id": "pkg-4",
           "category_id": "cat-2",
-          "name": "โทรเปิดไพ่ ♡ 15 นาที",
+          "name": "♡ 15 น݁า݂ที     69 บ݁า݂ท ♡ ⃗",
           "description": "♡ 15 น݁า݂ที     69 บ݁า݂ท ♡ ⃗ คุยสด ถาม-ตอบคลายทุกข้อสงสัยอย่างเป็นกันเอง",
           "price": 69,
-          "badge": "♡ 15 นาที",
+          "badge": "69.-",
           "is_active": true,
           "product_type": "fortune"
         },
         {
           "id": "pkg-5",
           "category_id": "cat-2",
-          "name": "โทรเปิดไพ่ ♡ 25 นาที",
+          "name": "♡ 25 น݁า݂ที     89 บ݁า݂ท 𓈒",
           "description": "♡ 25 น݁า݂ที     89 บ݁า݂ท 𓈒 ปรึกษาเจาะลึกเรื่องความรัก การงาน การเงิน",
           "price": 89,
-          "badge": "แนะนำ 💫",
+          "badge": "89.-",
           "is_active": true,
           "product_type": "fortune"
         },
         {
           "id": "pkg-6",
           "category_id": "cat-2",
-          "name": "โทรเปิดไพ่ ♡ 45 นาที",
+          "name": "♡ 45 น݁า݂ที     139 บ݁า݂ท",
           "description": "♡ 45 น݁า݂ที     139 บ݁า݂ท เคลียร์ทุกเรื่องรอบด้าน ไม่จำกัดจำนวนคำถามในเวลา",
           "price": 139,
-          "badge": "คุ้มสุด 🧺",
+          "badge": "139.-",
           "is_active": true,
           "product_type": "fortune"
-        }
-      ]
-    },
-    {
-      "id": "cat-3",
-      "name": "🍎 เสริมดวง & วัตถุมงคล (Lucky Charms & Merchandise)",
-      "description": "ของมงคลนำโชคและวอลเปเปอร์เสริมดวงสไตล์ Auralune",
-      "sort_order": 3,
-      "product_type": "physical",
-      "packages": [
-        {
-          "id": "pkg-7",
-          "category_id": "cat-3",
-          "name": "วอลเปเปอร์มือถือเสริมดวง Auralune (Digital Wallpaper)",
-          "description": "จัดวางไพ่มงคลและเลขศาสตร์ตามดวงวันเกิด ภาพประกอบคอตเทจคอร์สุดคิ้วท์",
-          "price": 59,
-          "badge": "Digital 📱",
-          "is_active": true,
-          "product_type": "fortune"
-        },
-        {
-          "id": "pkg-8",
-          "category_id": "cat-3",
-          "name": "กล่องสุ่ม Lucky Apple Box (ของมงคล + กลิ่นหอม)",
-          "description": "กล่องสุ่มของขวัญนำโชค มีกลิ่นหอมแอปเปิ้ลธรรมชาติ พร้อมของที่ระลึกจัดส่งถึงบ้าน",
-          "price": 199,
-          "original_price": 250,
-          "badge": "จัดส่งพัสดุ 📦",
-          "is_active": true,
-          "product_type": "physical"
         }
       ]
     }
