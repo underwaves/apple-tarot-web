@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: apple-tarot-web
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_PASSWORD
+        sync: false
+        value: apple2026
+      # Optional: หากใช้ Supabase ให้กรอกค่านี้ในหน้า Render Dashboard หรือปลดคอมเมนต์
+      # - key: NEXT_PUBLIC_SUPABASE_URL
+      #   sync: false
+      # - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+      #   sync: false
+      # - key: SUPABASE_SERVICE_ROLE_KEY
+      #   sync: false

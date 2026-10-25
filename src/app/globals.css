@@ -1,0 +1,337 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* ========================================================
+       Pastel Apple Orchard Design Tokens 🍎🌷
+       Soft Kawaii, Cottagecore, Pinterest Aesthetic
+       ======================================================== */
+    --primary: #F6B8C6;          /* Pastel Apple Pink */
+    --primary-hover: #F29EAE;
+    --primary-deep: #D06D80;     /* Apple Rose for titles/accents */
+    --secondary: #A8B99A;        /* Soft Sage Green */
+    --secondary-hover: #96A886;
+    --bg-vanilla: #FFF8EC;       /* Vanilla Cream */
+    --light-pink: #FCE4EC;       /* Baby Pink */
+    --apple-green: #C9DDB8;      /* Pastel Green */
+    --accent-peach: #F6D1B5;     /* Peach Cream */
+    --text-soft: #947765;        /* Soft Brown */
+    --text-deep: #543E30;        /* Deep Warm Chocolate Brown */
+    --text-muted: #A38C7E;       /* Muted Brown */
+    --white: #FFFEFA;            /* Soft White */
+    --card-bg: #FFFEFA;
+    --card-border: rgba(246, 184, 198, 0.45);
+    --card-shadow: 0 8px 24px rgba(148, 119, 101, 0.08);
+
+    /* Legacy mapping tokens for component compatibility */
+    --apple-bright: #F6B8C6;
+    --apple-main: #E88E9F;
+    --apple-deep: #D06D80;
+    --apple-glow: #FCE4EC;
+    --leaf-bright: #C9DDB8;
+    --leaf-main: #A8B99A;
+    --leaf-deep: #7D946D;
+    --forest-deep: #543E30;
+    --forest-darkest: #3D2B20;
+    --wood-light: #F6D1B5;
+    --wood-main: #947765;
+    --wood-deep: #543E30;
+    --cream-light: #FFFEFA;
+    --cream-soft: #FFF8EC;
+    --cream-mute: #FCE4EC;
+    --cream-card: #FFFEFA;
+    --line: rgba(246, 184, 198, 0.4);
+    --btn-bg: #FFFEFA;
+
+    --font-ui: var(--font-itim), "Itim", var(--font-mali), "Mali", cursive, sans-serif;
+    --serif: var(--font-ui);
+    --sans: var(--font-ui);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    font-family: var(--font-ui);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--text-deep);
+    font-family: var(--font-ui) !important;
+    overflow-x: hidden;
+    background: radial-gradient(
+      ellipse 120% 80% at 50% -10%,
+      #FFF0F5 0%,
+      #FFF8EC 45%,
+      #F5F8F0 80%,
+      #FFF8EC 100%
+    ) fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6, p, span, a, label, button, input, textarea, select {
+    font-family: var(--font-ui) !important;
+  }
+
+  .font-serif,
+  .font-sans,
+  .font-mono {
+    font-family: var(--font-ui) !important;
+  }
+
+  /* Double hairline frame on mobile/tablet - Soft Pastel Rose */
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    pointer-events: none;
+    border: 1.5px solid var(--line);
+    z-index: 40;
+  }
+  body::before {
+    inset: 8px;
+    border-radius: 14px;
+    opacity: 0.85;
+  }
+  body::after {
+    inset: 14px;
+    opacity: 0.55;
+    border-radius: 10px;
+  }
+
+  /* Disable decorative full-screen borders on mobile and wide desktop to maximize usable touch space */
+  @media (max-width: 639px) {
+    body::before,
+    body::after {
+      display: none;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    body::before,
+    body::after {
+      display: none;
+    }
+  }
+}
+
+/* Page container with responsive boutique max-width */
+.page-container {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 580px;
+  margin-inline: auto;
+  padding: 16px 12px 108px;
+}
+
+@media (min-width: 640px) {
+  .page-container {
+    max-width: 720px;
+    padding: 32px 24px 104px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-container {
+    max-width: 820px;
+    padding: 40px 28px 112px;
+  }
+}
+
+/* Typography - Romantic Cottagecore Titles */
+h1.hero-title {
+  white-space: pre-line;
+  margin: 0;
+  font-family: var(--font-ui) !important;
+  font-weight: 700;
+  font-size: clamp(38px, 6vw, 56px);
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, #543E30 0%, #7D5B46 55%, #D06D80 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(246, 184, 198, 0.35));
+}
+
+/* Signature Apple Cottage Buttons */
+.pkg-btn,
+.cta-btn,
+.secondary-btn,
+.quick-btn,
+.cart-floating-btn,
+.music-toggle-btn {
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Package Catalog Cards */
+.pkg-btn {
+  border-radius: 16px 28px 16px 28px;
+  background: #FFFEFA !important;
+  color: #543E30 !important;
+  border: 1.5px solid rgba(246, 184, 198, 0.5) !important;
+  box-shadow: 0 6px 20px rgba(148, 119, 101, 0.07);
+}
+
+.pkg-btn:hover {
+  border-color: #F6B8C6 !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 10px 28px rgba(246, 184, 198, 0.25);
+  transform: translateY(-2px);
+}
+
+.pkg-btn[aria-pressed="true"] {
+  border-color: #E88E9F !important;
+  background: #FFF2F5 !important;
+  box-shadow: 0 8px 24px rgba(232, 142, 159, 0.25);
+}
+
+/* Primary CTA Button: Pastel Apple Pink */
+.cta-btn {
+  border-radius: 12px 24px 12px 24px;
+  background: linear-gradient(135deg, #F6B8C6 0%, #E88E9F 100%) !important;
+  border: 1.5px solid #FCE4EC !important;
+  color: #543E30 !important;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(246, 184, 198, 0.4);
+}
+
+.cta-btn:hover {
+  filter: brightness(0.96);
+  background: linear-gradient(135deg, #F29EAE 0%, #DE7A8D 100%) !important;
+  box-shadow: 0 8px 24px rgba(246, 184, 198, 0.55);
+  transform: translateY(-1px);
+}
+
+/* Secondary Button: Soft Sage Green */
+.secondary-btn {
+  border-radius: 12px;
+  background: #FFFEFA !important;
+  color: #543E30 !important;
+  border: 1.5px solid rgba(168, 185, 154, 0.55) !important;
+  box-shadow: 0 4px 14px rgba(148, 119, 101, 0.06);
+}
+
+.secondary-btn:hover {
+  background: #F4F8F0 !important;
+  border-color: #A8B99A !important;
+}
+
+/* Quick Action Buttons on Hero */
+.quick-btn {
+  border-radius: 12px 22px 12px 22px;
+  background: #FFFEFA !important;
+  color: #543E30 !important;
+  border: 1.5px solid rgba(168, 185, 154, 0.55) !important;
+  font-size: 14.5px;
+  padding: 10px 14px;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(148, 119, 101, 0.06);
+}
+
+.quick-btn:hover {
+  border-color: #A8B99A !important;
+  background: #F4F8F0 !important;
+  box-shadow: 0 6px 18px rgba(168, 185, 154, 0.22);
+  transform: translateY(-1px);
+}
+
+/* Category header with Pastel Pink & Sage divider */
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 18px;
+  color: #543E30;
+  flex-wrap: wrap;
+}
+@media (min-width: 640px) {
+  .category-header {
+    gap: 12px;
+    font-size: 22px;
+    flex-wrap: nowrap;
+  }
+}
+.category-header::after {
+  content: "";
+  flex: 1;
+  min-width: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, #F6B8C6 0%, #C9DDB8 70%, transparent 100%);
+}
+
+/* Mobile-specific ergonomic touch enhancements */
+@media (max-width: 639px) {
+  .pkg-btn {
+    padding: 12px 14px !important;
+    border-radius: 14px 22px 14px 22px !important;
+  }
+  .quick-btn {
+    font-size: 13.5px !important;
+    padding: 8px 10px !important;
+  }
+}
+
+/* Form controls with Soft Brown & Pastel Pink focus */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="tel"],
+select,
+textarea {
+  width: 100%;
+  padding: 12px 16px;
+  color: #543E30;
+  background: #FFFEFA;
+  border: 1.5px solid #C9DDB8;
+  border-radius: 14px;
+  outline: none;
+  font-size: 14.5px;
+  box-shadow: inset 0 2px 4px rgba(148, 119, 101, 0.03);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #F6B8C6;
+  box-shadow: 0 0 0 3px rgba(246, 184, 198, 0.25);
+  background: #FFFFFF;
+}
+
+/* Click ripple */
+.ripple-effect {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(246, 184, 198, 0.4);
+  transform: scale(0);
+  animation: ripple-anim 0.65s linear;
+  pointer-events: none;
+}
+
+@keyframes ripple-anim {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Custom scrollbars - Pastel Apple Orchard */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #FFF8EC;
+}
+::-webkit-scrollbar-thumb {
+  background: #C9DDB8;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A8B99A;
+}

@@ -1,0 +1,64 @@
+# MORJENG REFERENCE ANALYSIS REPORT
+
+## 1. Visual & Layout Design Architecture
+- Container: Mobile-first card frame centered on screen (`max-width: 520px` in `.page`) with double hairline border frame (`body::before`, `body::after`).
+- Background: Radial gradient with cosmic/nature ambient particles and glowing accents.
+- Typography: Cormorant Garamond serif for headers/prices + Kanit for clean Thai text.
+- Button style: High-contrast rounded pill/beveled border (`border-radius: 4px 22px 4px 22px`), vibrant glow on hover/active (`aria-pressed`).
+- Background music: Floating top-right button `♫` with toggle, audio element `#bgm`.
+
+## 2. Customer Page Sections & Components
+### A. Hero Header
+- Store Banner (`#banImg`) & Avatar (`#avImg`) with circular decorative border
+- Store Title (h1) with gradient text and drop shadow
+- Store Subtitle / Tagline (`.sub`)
+- Action Quick Buttons row:
+  * 'ดูคิว' (Queue Tracker Modal)
+  * 'ดูรีวิว' (Reviews / Testimonials Modal)
+  * 'ติดต่อ' (Store Contact Modal - LINE, IG, etc.)
+  * 'เข้าสู่ระบบ' (Member login/account)
+
+### B. Product / Package Listing
+- Categorized sections (`.cats > .cat`): Each category has a header with icon line divider (`.ch`) and description (`.cd`).
+- Product Cards (`.pkg`):
+  * Title (`b`), description (`small`), price (`.pr` with optional discount strikethrough `<s>`).
+  * Selection toggle: Clicking selects item and updates bottom cart floating bar.
+
+### C. Sticky Bottom Cart Bar
+- Fixed bottom bar (`.cartb`): Displays count of selected items (`#cbn`) and total price (`#cbp`).
+- Clicking opens the Order Flow / Cart Modal.
+
+### D. Multi-Step Order Flow (Modals)
+- **Step 1: Cart Modal (`#mc`)**
+  * Lists selected packages with remove/adjust
+  * Shows total summary
+  * Action button: 'ถัดไป · กรอกข้อมูล' (Next: Customer Details)
+- **Step 2: Customer Information Modal (`#s2`)**
+  * Customer Name (`#name`)
+  * Order Notes / Details / Questions (`#q`)
+  * Contact Channel Selection (`#cs`): Choice of LINE, Instagram, Facebook, Phone number, with handle/username input
+  * Navigation: Back to cart or 'ถัดไป · ไปหน้าโอนเงิน' (Next: Payment)
+- **Step 3: Payment Modal (`#s3`)**
+  * PromptPay QR code dynamically rendered with CRC16 payload generation (`#qr`)
+  * Transfer amount (`#amt`)
+  * Account Name / Number (`#who`) with one-click copy button (`#copies`)
+  * Action button: 'แนบสลิป · ส่งให้ร้าน' (Attach Slip · Send to Shop)
+- **Step 4: Slip Upload & Submission Modal (`#s4`)**
+  * Drag-and-drop file upload zone (`#drop`, `#slip`) with live image preview (`#prev`)
+  * Action button: 'ส่งข้อมูลรับบิล' (Submit Order & Slip)
+  * Progress & validation messages (`#msg`)
+- **Step 5: Order Confirmation / Bill Modal (`#done`)**
+  * Order Number / Code (unique)
+  * Order summary & customer details
+  * Quick button to contact shop / send order bill directly via LINE/social
+  * Direct link to track order in Queue
+
+### E. Queue Tracker (`#mk`)
+- Order lookup by Order ID / Customer info
+- Queue status badge (e.g. 'รอตรวจสลิป', 'รอตรวจคิว', 'กำลังดำเนินงาน', 'เสร็จแล้ว')
+- Queue number / position
+- Estimated turnaround / time
+- Shop note / updates for customer
+
+### F. Admin Backoffice (`#adm`)
+- Admin functions found in code: tryAdminLogin, admin, adminLogin, adminName, adminCid, setAdminUI, adminEmail, closeAdmin, lb_adm_pw, adm, openAdm, chatAdmin

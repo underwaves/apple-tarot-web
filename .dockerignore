@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.gitignore
+screenshots
+_reference
+Ex.1.pdf
+*.md
+*.log

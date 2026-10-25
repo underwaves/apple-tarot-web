@@ -1,0 +1,32 @@
+id='adm' found at: 42021
+HTML around id='adm':
+</section>
+
+<footer class="foot" id="foot" data-t="foot"></footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<div id="ov" hidden></div>
+<div id="adm" hidden></div>
+<script>
+/* ===== à¸à¸±à¹à¸à¸à¹à¸²à¸à¸£à¸±à¹à¸à¹à¸à¸µà¸¢à¸§ ===== */
+const CONFIG = {
+  fbKey: 'AIzaSyCj5gPaMZoRSBvRKW6RAmi6ZUsMYnCgGKI',
+  fbDb: 'https://morjeng-b49fe-default-rtdb.firebaseio.com',
+  fbProject: 'morjeng-b49fe',
+  adminEmail: 'morjeng@config.web'
+};
+/* à¸à¹à¸­à¸à¸§à¸²à¸¡à¸à¸±à¹à¸à¸à¹à¸ */
+const DEFAULTS = {
+  shop:'à¸«à¸¡à¸­à¹à¸à¹à¸ à¹à¸à¹à¸²à¹à¸¡à¹à¸¡à¸¹à¹à¸à¸¥à¸¹', title:'à¸«à¸¡à¸­à¹à¸à¹à¸\nà¹à¸à¹à¸²à¹à¸¡à¹à¸¡à¸¹à¹à¸à¸¥à¸¹', sub:'à¸à¸¹à¸à¸§à¸ Â· à¸ªà¸µà¸¡à¸à¸à¸¥ Â· à¹à¸¥à¸à¸¡à¸à¸à¸¥ Â· à¸à¸­à¸à¹à¸ªà¸£à¸´à¸¡à¸à¸§à¸',
+  h2:'à¸à¹à¸­à¸¡à¸¹à¸¥à¸¥à¸¹à¸à¸à¹à¸²', h3:'à¸ªà¹à¸à¸à¸à¹à¸²à¸¢', h4:'à¹à¸à¸à¸ªà¸¥à¸´à¸',
+  namePh:'à¸à¸·à¹à¸­à¸¥à¸¹à¸à¸à¹à¸²', bdL:'à¸§à¸±à¸/à¹à¸à¸·à¸­à¸/à¸à¸µà¹à¸à¸´à¸', btL:'à¹à¸§à¸¥à¸²à¹à¸à¸´à¸ (à¸à¹à¸²à¸à¸£à¸²à¸)', zL:'à¸£à¸²à¸¨à¸µ', zPh:'à¹à¸¥à¸·à¸­à¸à¸£à¸²à¸¨à¸µ', cL:'à¸à¹à¸­à¸à¸à¸²à¸à¸à¸´à¸à¸à¹à¸­à¸¥à¸¹à¸à¸à¹à¸² (à¸à¸£à¸­à¸à¸­à¸¢à¹à¸²à¸à¸à¹à¸­à¸¢ 1 à¸à¹à¸­à¸à¸à¸²à¸)', cTypes:'LINE,Instagram,à¹à¸à¸­à¸£à¹à¹à¸à¸£', qL:'à¸à¸³à¸à¸²à¸¡ / à¹à¸£à¸·à¹à¸­à¸à¸à¸µà¹à¸­à¸¢à¸²à¸à¸à¸¹ (à¸à¹à¸²à¸¡à¸µ)', qPh:'à¹à¸à¹à¸ à¹à¸£à¸·à¹à¸­à¸à¸à¸²à¸ à¸à¸§à¸²à¸¡à¸£à¸±à¸ à¸à¸²à¸£à¹à¸à¸´à¸',
+  mBd:'à¸à¸£à¸¸à¸à¸²à¸à¸£à¸­à¸à¸§à¸±à¸à¹à¸à¸·à¸­à¸à¸à¸µà¹à¸à¸´à¸à¸à¹à¸°', mZ:'à¸à¸£à¸¸à¸à¸²à¹à¸¥à¸·à¸­à¸à¸£à¸²à¸¨à¸µà¸à¹à¸°', mCt:'à¸à¸£à¸¸à¸à¸²à¸à¸£à¸­à¸à¸à¹à¸­à¸à¸à¸²à¸à¸à¸´à¸à¸à
+
+Script occurrences of 'adm': 6
+... qrcode.min.js"></script> <div id="ov" hidden></div> <div id="adm" hidden></div> <script> /* ===== à¸à¸±à¹à¸à¸à¹à¸²à¸à¸£à¸±à¹à¸à¹à¸à¸µà¸¢à¸§ ===== */ c
+... hidden = true); document.body.classList.remove('mo'); if ($('adm').hidden &&$('ov').hidden) document.body.style.overflow = ''; } function openPay(){   const t =
+...   if (!(MS.some(m => !$(m).hidden) || !$('ov').hidden || !$('adm').hidden)) document.body.style.overflow = ''; } function finishAuth(msg){ const f = afterAuth; 
+... ck = () => d.remove(); return d; } function closeAdmin(){ $('adm').hidden = true; document.body.style.overflow = ''; } async function openAdm(){   const pw = pr
+... à¸à¹'); return; }   LSs('lb_adm_pw', '');   showEdit(); $('adm').hidden = false; document.body.style.overflow = 'hidden'; } function cgrow(c = {}){   const d 
+... 00%">à¸à¸´à¸à¸«à¸¥à¸±à¸à¸à¹à¸²à¸</button></div>';   $('adm').innerHTML = h; wireImg();   D.categories.forEach(c => $('cgs').appendChild(cgrow(c)));   (D.c

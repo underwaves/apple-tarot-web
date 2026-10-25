@@ -1,0 +1,176 @@
+=== PAGE TITLE ===
+à¹à¸à¹à¸²à¹à¸¡à¹à¸¡à¸¹à¹à¸à¸¥à¸¹
+
+=== META TAGS ===
+{'charset': 'UTF-8'}
+{'name': 'viewport', 'content': 'width=device-width, initial-scale=1, viewport-fit=cover'}
+{'name': 'theme-color', 'content': '#e05a00'}
+
+=== HEADINGS ===
+<h1>: 
+<h3>: à¸à¸°à¸à¸£à¹à¸²à¸à¸­à¸à¸à¸¸à¸
+<h2>: 
+<h2>: 
+<h2>: 
+<h3>: 
+<h3>: à¹à¸à¹à¸²à¸ªà¸¹à¹à¸£à¸°à¸à¸
+<h3>: à¸ªà¸¡à¸±à¸à¸£à¸ªà¸¡à¸²à¸à¸´à¸
+
+=== ALL BUTTONS & LINKS ===
+<button id='mu' class='['mu', 'off']'> âª
+<button id='qb' class='['qbtn']'> 
+<button id='rb' class='['qbtn']'> 
+<button id='ctb' class='['qbtn']'> 
+<button id='pb' class='['qbtn']'> à¹à¸à¹à¸²à¸ªà¸¹à¹à¸£à¸°à¸à¸
+<button id='cbt' class='['cartb']'> 
+<button id='chf' class='['chf']'> 
+<button id='chfs' class=''> â¶
+<button id='chx' class=''> â
+<button id='' class='['x']'> â
+<button id='go' class='['cta']'> à¸à¸±à¸à¹à¸ Â· à¸à¸£à¸­à¸à¸à¹à¸­à¸¡à¸¹à¸¥
+<button id='' class='['x']'> â
+<button id='to3' class='['cta']'> à¸à¸±à¸à¹à¸ Â· à¹à¸à¸«à¸à¹à¸²à¹à¸­à¸à¹à¸à¸´à¸
+<button id='bk2' class='['btn2']'> â à¸à¸¥à¸±à¸à¹à¸à¸à¸°à¸à¸£à¹à¸²
+<button id='' class='['x']'> â
+<button id='tos4' class='['cta']'> à¹à¸à¸à¸ªà¸¥à¸´à¸ Â· à¸ªà¹à¸à¹à¸«à¹à¸£à¹à¸²à¸
+<button id='' class='['x']'> â
+<button id='send' class='['cta']'> 
+<button id='bk' class='['btn2']'> â à¸à¸¥à¸±à¸à¹à¸à¸«à¸à¹à¸²à¹à¸­à¸
+<button id='' class='['x']'> â
+<button id='' class='['x']'> â
+<button id='lgs' class='['cta']'> à¹à¸à¹à¸²à¸ªà¸¹à¹à¸£à¸°à¸à¸
+<button id='lg2rg' class='['btn2']'> à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸±à¸à¸à¸µ? à¸ªà¸¡à¸±à¸à¸£à¸ªà¸¡à¸²à¸à¸´à¸
+<button id='' class='['x']'> â
+<button id='rgs' class='['cta']'> à¸ªà¸¡à¸±à¸à¸£à¸ªà¸¡à¸²à¸à¸´à¸
+<button id='rg2lg' class='['btn2']'> à¸¡à¸µà¸à¸±à¸à¸à¸µà¹à¸¥à¹à¸§? à¹à¸à¹à¸²à¸ªà¸¹à¹à¸£à¸°à¸à¸
+
+=== STRUCTURAL ELEMENTS WITH ID OR CLASS ===
+<div id='intro' class=''>
+<canvas id='sky' class=''>
+<g id='zg' class=''>
+<audio id='bgm' class=''>
+<button id='mu' class='mu off'>
+<symbol id='st' class=''>
+<header id='' class='hero'>
+<div id='ban' class='ban'>
+<img id='banImg' class=''>
+<div id='av' class='av'>
+<img id='avImg' class=''>
+<button id='qb' class='qbtn'>
+<button id='rb' class='qbtn'>
+<button id='ctb' class='qbtn'>
+<button id='pb' class='qbtn'>
+<span id='pbt' class=''>
+<form id='form' class=''>
+<section id='cats' class='cats'>
+<button id='cbt' class='cartb'>
+<span id='cbn' class=''>
+<b id='cbp' class=''>
+<button id='chf' class='chf'>
+<i id='chd' class='chd'>
+<section id='chp' class='chp'>
+<i id='cha' class='cha'>
+<span id='cht' class=''>
+<small id='chstat' class=''>
+<button id='chfs' class=''>
+<button id='chx' class=''>
+<div id='chbody' class=''>
+<section id='mc' class='modal'>
+<div id='cartl' class=''>
+<b id='ct' class=''>
+<button id='go' class='cta'>
+<p id='cm' class='msg'>
+<section id='s2' class='modal'>
+<div id='ubar' class='ubar'>
+<textarea id='name' class='ag'>
+<input id='bd' class=''>
+<input id='bt' class=''>
+<select id='zd' class=''>
+<div id='cs' class=''>
+<textarea id='q' class=''>
+<p id='m2' class='msg'>
+<button id='to3' class='cta'>
+<button id='bk2' class='btn2'>
+<section id='s3' class='modal'>
+<div id='qr' class=''>
+<p id='amt' class='amt'>
+<p id='who' class='who'>
+<div id='copies' class=''>
+<button id='tos4' class='cta'>
+<section id='s4' class='modal'>
+<label id='drop' class='drop'>
+<input id='slip' class=''>
+<span id='droptxt' class=''>
+<img id='prev' class=''>
+<button id='send' class='cta'>
+<p id='msg' class='msg'>
+<button id='bk' class='btn2'>
+<section id='mk' class='modal'>
+<p id='ctn' class='msg good'>
+<div id='ctl' class='ctl'>
+<section id='lg' class='modal'>
+<p id='lgn' class='ahint'>
+<form id='lgf' class=''>
+<input id='lgu' class=''>
+<input id='lgp' class=''>
+<button id='lgs' class='cta'>
+<p id='lgm' class='msg'>
+<button id='lg2rg' class='btn2'>
+<section id='rg' class='modal'>
+<p id='rgn' class='ahint'>
+<form id='rgf' class=''>
+<input id='rgu' class=''>
+<input id='rgp' class=''>
+<input id='rgp2' class=''>
+<button id='rgs' class='cta'>
+<p id='rgm' class='msg'>
+<button id='rg2lg' class='btn2'>
+<section id='done' class='done'>
+<footer id='foot' class='foot'>
+<div id='ov' class=''>
+<div id='adm' class=''>
+
+=== INLINE JAVASCRIPT DETAILS ===
+
+--- SCRIPT 0 (len: 105) ---
+try{var _t=localStorage.getItem("lb_intro");if(_t)document.querySelector(".il").textContent=_t}catch(e){}
+
+--- SCRIPT 1 (len: 1640) ---
+
+(()=>{const $$=id=>document.getElementById(id),c=$$('sky'),g=c.getContext('2d'),dpr=Math.min(devicePixelRatio||1,2),rm=matchMedia('(prefers-reduced-motion:reduce)').matches,T=Date.now(),t0=performance.now();
+let W,H,raf,sh=null;const rs=()=>{W=c.width=innerWidth*dpr;H=c.height=innerHeight*dpr};rs();addEventListener('resize',rs);
+$$('zg').innerHTML=[...Array(12)].map((_,k)=>`<use href="#st" x="${(83*Math.sin(k*Math.PI/6)-5).toFixed(1)}" y="${(-83*Math.cos(k*Math.PI/6)-5).toFixed(1)}" width="10" height="10"/>`).join('');
+const S=Array.from({length:160},()=>({x:Math.random(),y:Math.random(),r:Math.random()*1.4+.3,p:Math.random()*6.28,s:Math.random()*1.8+.5}));
+function draw(now){const t=(now-t0)/1000;g.clearRect(0,0,W,H);
+for(const s of S){const a=.25+.75*(Math.sin(t*s.s+s.p)*.5+.5),y=(((s.y-t*.01*s.r)%1)+1)%1;g.fillStyle='rgba(255,255,255,'+a.toFixed(2)+')';g.beginPath();g.arc(s.x*W,y*H,s.r*dpr,0,6.283);g.fill()}
+if(!rm&&!sh&&Math.random()<.012)sh={x:Math.random()*W*.7,y:Math.random()*H*.35,k:0};
+if(sh){sh.k+=.022;const x=sh.x+sh.k*W*.3,y=sh.y+sh.k*H*.2,gr=g.createLinearGradient(x,y,x-W*.1,y-H*.07);gr.addColorStop(0,'rgba(255,255,255,'+Math.max(0,1-sh.k).toFixed(2)+')');gr.addColorStop(1,'rgba(255,255,255,0)');g.strokeStyle=gr;g.lineWidth=1.6*dpr;g.beginPath();g.moveTo(x,y);g.lineTo(x-W*.1,y-H*.07);g.stroke();if(sh.k>=1)sh=null}
+if(!rm)raf=requestAnimationFrame(draw)}
+raf=requestAnimationFrame(draw);
+window.endIntro=()=>setTimeout(()=>{const i=$$('intro');i.classList.add('out');document.body.classList.remove('ld');setTimeout(()=>{i.remove();cancelAnimationFrame(raf)},1200)},Math.max(0,2800-(Date.now()-T)));
+})();
+
+
+--- SCRIPT 2 (len: 0) ---
+
+
+--- SCRIPT 3 (len: 86273) ---
+
+/* ===== à¸à¸±à¹à¸à¸à¹à¸²à¸à¸£à¸±à¹à¸à¹à¸à¸µà¸¢à¸§ ===== */
+const CONFIG = {
+  fbKey: 'AIzaSyCj5gPaMZoRSBvRKW6RAmi6ZUsMYnCgGKI',
+  fbDb: 'https://morjeng-b49fe-default-rtdb.firebaseio.com',
+  fbProject: 'morjeng-b49fe',
+  adminEmail: 'morjeng@config.web'
+};
+/* à¸à¹à¸­à¸à¸§à¸²à¸¡à¸à¸±à¹à¸à¸à¹à¸ */
+const DEFAULTS = {
+  shop:'à¸«à¸¡à¸­à¹à¸à¹à¸ à¹à¸à¹à¸²à¹à¸¡à¹à¸¡à¸¹à¹à¸à¸¥à¸¹', title:'à¸«à¸¡à¸­à¹à¸à¹à¸\nà¹à¸à¹à¸²à¹à¸¡à¹à¸¡à¸¹à¹à¸à¸¥à¸¹', sub:'à¸à¸¹à¸à¸§à¸ Â· à¸ªà¸µà¸¡à¸à¸à¸¥ Â· à¹à¸¥à¸à¸¡à¸à¸à¸¥ Â· à¸à¸­à¸à¹à¸ªà¸£à¸´à¸¡à¸à¸§à¸',
+  h2:'à¸à¹à¸­à¸¡à¸¹à¸¥à¸¥à¸¹à¸à¸à¹à¸²', h3:'à¸ªà¹à¸à¸à¸à¹à¸²à¸¢', h4:'à¹à¸à¸à¸ªà¸¥à¸´à¸',
+  namePh:'à¸à¸·à¹à¸­à¸¥à¸¹à¸à¸à¹à¸²', bdL:'à¸§à¸±à¸/à¹à¸à¸·à¸­à¸/à¸à¸µà¹à¸à¸´à¸', btL:'à¹à¸§à¸¥à¸²à¹à¸à¸´à¸ (à¸à¹à¸²à¸à¸£à¸²à¸)', zL:'à¸£à¸²à¸¨à¸µ', zPh:'à¹à¸¥à¸·à¸­à¸à¸£à¸²à¸¨à¸µ', cL:'à¸à¹à¸­à¸à¸à¸²à¸à¸à¸´à¸à¸à¹à¸­à¸¥à¸¹à¸à¸à¹à¸² (à¸à¸£à¸­à¸à¸­à¸¢à¹à¸²à¸à¸à¹à¸­à¸¢ 1 à¸à¹à¸­à¸à¸à¸²à¸)', cTypes:'LINE,Instagram,à¹à¸à¸­à¸£à¹à¹à¸à¸£', qL:'à¸à¸³à¸à¸²à¸¡ / à¹à¸£à¸·à¹à¸­à¸à¸à¸µà¹à¸­à¸¢à¸²à¸à¸à¸¹ (à¸à¹à¸²à¸¡à¸µ)', qPh:'à¹à¸à¹à¸ à¹à¸£à¸·à¹à¸­à¸à¸à¸²à¸ à¸à¸§à¸²à¸¡à¸£à¸±à¸ à¸à¸²à¸£à¹à¸à¸´à¸',
+  mBd:'à¸à¸£à¸¸à¸à¸²à¸à¸£à¸­à¸à¸§à¸±à¸à¹à¸à¸·à¸­à¸à¸à¸µà¹à¸à¸´à¸à¸à¹à¸°', mZ:'à¸à¸£à¸¸à¸à¸²à¹à¸¥à¸·à¸­à¸à¸£à¸²à¸¨à¸µà¸à¹à¸°', mCt:'à¸à¸£à¸¸à¸à¸²à¸à¸£à¸­à¸à¸à¹à¸­à¸à¸à¸²à¸à¸à¸´à¸à¸à¹à¸­à¸­à¸¢à¹à¸²à¸à¸à¹à¸­à¸¢ 1 à¸à¹à¸­à¸à¸à¸²à¸à¸à¹à¸°',
+  qBtn:'à¸à¸¹à¸à¸´à¸§', rvBtn:'à¸à¸¹à¸£à¸µà¸§à¸´à¸§', rvT:'à¸£à¸µà¸§à¸´à¸§à¸à¸²à¸à¸¥à¸¹à¸à¸à¹à¸²', rvEmpty:'à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸£à¸µà¸§à¸´à¸§à¸à¹à¸° à¸¡à¸²à¹à¸à¹à¸à¸à¸à¹à¸£à¸à¹à¸¥à¸¢à¸à¸°à¸à¸°', qT:'à¸à¸´à¸§à¸à¸­à¸à¸¥à¸¹à¸à¸à¹à¸²', qEmpty:'à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸´à¸§à¹à¸à¸à¸­à¸à¸à¸µà¹à¸à¹à¸°', bSend:'à¸ªà¹à¸à¸à¸´à¸¥ + à¸à¹à¸­à¸¡à¸¹à¸¥à¹à¸à¸à¸²à¸à¸à¸­à¸à¹à¸à¸', bCopy:'à¸ªà¹à¸à¸à¸´à¸¥à¹à¸«à¹à¸£à¹à¸²à¸', stDef:'à¸£à¸­à¸à¸£à¸§à¸à¸ªà¸¥à¸´à¸', stList:'à¸£à¸­à¸à¸£à¸§à¸à¸ªà¸¥à¸´à¸,à¸£à¸­à¸à¸£à¸§à¸à¸à¸´à¸§,à¸à¸³à¸¥à¸±à¸à¸à¸¹à¸à¸§à¸,à¹à¸ªà¸£à¹à¸à¹à¸¥à¹à¸§', contacts:[], socials:[{type:'LINE',name:'@688ijgqw',url:'https://line.me/R/ti/p/@688ijgqw'}], ctBtn:'à¸à¸´à¸à¸à¹à¸­', ctT:'à¸à¹à¸­à¸à¸à¸²à¸à¸à¸´à¸à¸à¹à¸­', ctEmpty:'à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¹à¸­à¸à¸à¸²à¸à¸à¸´à¸à¸à¹à¸­à¸à¹à¸°',
+  drop:'à¹à¸à¸°à¹à¸à¸·à¹à¸­à¹à¸¥à¸·à¸­à¸à¸£à¸¹à¸à¸ªà¸¥à¸´à¸', send:'à¸ªà¹à¸à¸à¹à¸­à¸¡à¸¹à¸¥à¸£à¸±à¸à¸à¸´à¸¥', amtLabel:'à¸¢à¸­à¸à¸à¸µà¹à¸à¹à¸­à¸à¹à¸­à¸ (à¸à¸²à¸)', ppLabel:'à¸à¸£à¹à¸­à¸¡à¹à¸à¸¢à¹',
+  mPkg:'à¸à¸£à¸¸à¸à¸²à¹à¸¥à¸·à¸­à¸à¹à¸à¹à¸à¹à¸à¸à¸à¹à¸­à¸à¸à¹à¸°', mName:'à¸à¸£à¸¸à¸à¸²à¸à¸£à¸­à¸à¸à¸·à¹à¸­à¸¥à¸¹à¸à¸à¹à¸²à¸à¹à¸­à¸à¸ªà¹à¸à¸ªà¸¥à¸´à¸à¸à¹à¸°', mSlip:'à¸à¸£à¸¸à¸à¸²à¹à¸à¸à¸£à¸¹à¸à¸ªà¸¥à¸´à¸à¸à¹à¸­à¸à¸ªà¹à¸à¸à¹à¸°',
+  mSend:'à¸à¸³à¸¥à¸±à¸à¸ªà¹à¸à¸à¹à¸­à¸¡à¸¹à¸¥...', mFail:'
+... [truncated]
