@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
-import QRCode from 'qrcode';
-import { generatePromptPayPayload } from '@/lib/promptpay';
 import { formatBaht } from '@/lib/utils';
 import { Order, StoreSettings } from '@/types';
-import { X, ArrowLeft, ArrowRight, Copy, Check, QrCode } from 'lucide-react';
+import { X, ArrowLeft, ArrowRight, Copy, Check } from 'lucide-react';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -25,11 +23,9 @@ export default function PaymentModal({
   order,
   settings,
 }: PaymentModalProps) {
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const [qrMode, setQrMode] = useState<'kbank' | 'promptpay' | 'truemoney'>(() => {
+  const [qrMode, setQrMode] = useState<'kbank' | 'truemoney'>(() => {
     if (typeof window === 'undefined') return 'kbank';
     const p = new URLSearchParams(window.location.search).get('preview');
-    if (p === 'payment_promptpay') return 'promptpay';
     if (p === 'payment_truemoney') return 'truemoney';
     return 'kbank';
   });
@@ -40,24 +36,6 @@ export default function PaymentModal({
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };
-
-  useEffect(() => {
-    if (!isOpen || !order) return;
-
-    const target = settings.promptpay_id || '0968895279';
-    const payload = generatePromptPayPayload(target, order.total_amount);
-
-    QRCode.toDataURL(payload, {
-      width: 280,
-      margin: 2,
-      color: {
-        dark: '#1b4332',
-        light: '#ffffff',
-      },
-    })
-      .then((url) => setQrDataUrl(url))
-      .catch((err) => console.error('Failed to generate QR code', err));
-  }, [isOpen, order, settings.promptpay_id]);
 
   if (!isOpen || !order) return null;
 
@@ -107,33 +85,22 @@ export default function PaymentModal({
           </div>
 
           {/* Payment Method Selector Tabs */}
-          <div className="flex items-center justify-center gap-1.5 p-1 bg-[#FFF8EC] rounded-xl border border-[#F6B8C6]/50 text-xs w-full">
+          <div className="flex items-center justify-center gap-2 p-1 bg-[#FFF8EC] rounded-xl border border-[#F6B8C6]/50 text-xs w-full max-w-xs">
             <button
               type="button"
               onClick={() => setQrMode('kbank')}
-              className={`flex-1 py-1.5 px-2 rounded-lg font-semibold transition cursor-pointer text-[11px] ${
+              className={`flex-1 py-1.5 px-3 rounded-lg font-semibold transition cursor-pointer text-xs ${
                 qrMode === 'kbank'
                   ? 'bg-[#138f2d] text-white shadow-xs'
                   : 'text-[#947765] hover:text-[#543E30]'
               }`}
             >
-              K+ กสิกร (แนะนำ)
-            </button>
-            <button
-              type="button"
-              onClick={() => setQrMode('promptpay')}
-              className={`flex-1 py-1.5 px-2 rounded-lg font-semibold transition cursor-pointer text-[11px] ${
-                qrMode === 'promptpay'
-                  ? 'bg-[#F6B8C6] text-[#543E30] shadow-xs'
-                  : 'text-[#947765] hover:text-[#543E30]'
-              }`}
-            >
-              พร้อมเพย์ (QR ตามยอด)
+              K+ กสิกร
             </button>
             <button
               type="button"
               onClick={() => setQrMode('truemoney')}
-              className={`flex-1 py-1.5 px-2 rounded-lg font-semibold transition cursor-pointer text-[11px] ${
+              className={`flex-1 py-1.5 px-3 rounded-lg font-semibold transition cursor-pointer text-xs ${
                 qrMode === 'truemoney'
                   ? 'bg-[#ff6f00] text-white shadow-xs'
                   : 'text-[#947765] hover:text-[#543E30]'
@@ -145,22 +112,7 @@ export default function PaymentModal({
 
           {/* QR Code Container */}
           <div className="p-3 bg-white rounded-2xl shadow-md border-4 border-[#C9DDB8] relative">
-            {qrMode === 'promptpay' ? (
-              qrDataUrl ? (
-                <Image
-                  src={qrDataUrl}
-                  alt="PromptPay QR Code"
-                  width={224}
-                  height={224}
-                  unoptimized
-                  className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
-                />
-              ) : (
-                <div className="w-52 h-52 flex items-center justify-center text-[#7D946D]">
-                  <QrCode className="w-12 h-12 animate-pulse" />
-                </div>
-              )
-            ) : qrMode === 'kbank' ? (
+            {qrMode === 'kbank' ? (
               <Image
                 src="/images/kbank_qr.png"
                 alt="KBank QR Code"
@@ -180,9 +132,7 @@ export default function PaymentModal({
               />
             )}
             <div className="mt-1 text-[11px] font-semibold text-[#543E30] uppercase tracking-wider">
-              {qrMode === 'promptpay'
-                ? 'Thai QR Payment · พร้อมเพย์'
-                : qrMode === 'kbank'
+              {qrMode === 'kbank'
                 ? 'KBank · ธนาคารกสิกรไทย'
                 : 'TrueMoney Wallet · ทรูมันนี่'}
             </div>
