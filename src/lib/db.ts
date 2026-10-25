@@ -54,6 +54,18 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
     express_estimated_time: '⚡ ภายใน 12-24 ชั่วโมง',
     is_store_open: true,
     store_close_message: 'ขณะนี้ร้านปิดรับคิวชั่วคราว สามารถแวะชมบริการหรือทักสอบถามทาง LINE ได้นะคะ 🌙',
+    theme_preset: 'apple',
+    custom_theme: {
+      primary: '#F6B8C6',
+      primary_hover: '#F29EAE',
+      primary_deep: '#D06D80',
+      secondary: '#A8B99A',
+      bg_vanilla: '#FFF8EC',
+      light_tone: '#FCE4EC',
+      accent_tone: '#F6D1B5',
+      text_deep: '#543E30',
+      text_soft: '#947765',
+    },
   },
   categories: [
     {

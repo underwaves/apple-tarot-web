@@ -18,6 +18,7 @@ import ContactModal from '@/components/modals/ContactModal';
 import ReviewsModal from '@/components/modals/ReviewsModal';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 import AdminDashboard from '@/components/admin/AdminDashboard';
+import ThemeInjector from '@/components/ThemeInjector';
 
 import { Category, PackageItem, StoreSettings, MusicTrack, Review, Order, OrderType } from '@/types';
 
@@ -265,6 +266,9 @@ export default function HomePage() {
 
   return (
     <main className="page-container">
+      {/* Dynamic Theme & Colors */}
+      <ThemeInjector settings={settings ?? undefined} />
+
       {/* Ambient Drifting Leaves & Apple Blossoms */}
       <AmbientCanvas />
 

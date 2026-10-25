@@ -111,6 +111,18 @@ export interface StoreContact {
   url: string;
 }
 
+export interface ThemeColors {
+  primary: string;        // สีหลัก (ปุ่ม CTA, กรอบเน้น, ไฮไลท์)
+  primary_hover?: string; // สีเมื่อ Hover
+  primary_deep: string;   // สีหัวข้อเด่น, ข้อความสำคัญ, ราคาสินค้า
+  secondary: string;      // สีรอง (ปุ่มทางลัด, เส้นคั่น)
+  bg_vanilla: string;     // สีพื้นหลังหลักของร้าน
+  light_tone?: string;    // สีพื้นหลังกล่องการ์ด / กล่องข้อความ
+  accent_tone?: string;   // สีลูกเล่น / สีตกแต่งเสริม
+  text_deep?: string;     // สีตัวหนังสือหลัก
+  text_soft?: string;     // สีตัวหนังสือรอง / คำอธิบาย
+}
+
 export interface StoreSettings {
   shop_name: string;
   shop_title: string;
@@ -131,6 +143,8 @@ export interface StoreSettings {
   express_estimated_time?: string;
   is_store_open?: boolean;
   store_close_message?: string;
+  theme_preset?: string;
+  custom_theme?: ThemeColors;
 }
 
 export interface MusicTrack {

@@ -9,8 +9,10 @@ import {
   StoreSettings,
   MusicTrack,
   Review,
+  ThemeColors,
 } from '@/types';
 import { formatBaht, formatThaiDate, extractYouTubeId } from '@/lib/utils';
+import { THEME_PRESETS, DEFAULT_THEME_COLORS, ThemePreset } from '@/lib/theme';
 import {
   X,
   LayoutDashboard,
@@ -36,6 +38,9 @@ import {
   Lock,
   Unlock,
   Store,
+  Palette,
+  Sparkles,
+  Check,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 import { compressImageToDataUrl } from '@/lib/image-client';
@@ -67,7 +72,7 @@ export default function AdminDashboard({
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'orders' | 'queues' | 'products' | 'settings' | 'music' | 'reviews'
+    'overview' | 'orders' | 'queues' | 'products' | 'settings' | 'theme' | 'music' | 'reviews'
   >('overview');
 
   // Data states
@@ -821,6 +826,430 @@ export default function AdminDashboard({
     });
   };
 
+  // Render Theme & Custom Color Customizer Panel
+  const renderThemePanel = () => {
+    if (!settings) return null;
+    const currentColors: ThemeColors = settings.custom_theme || DEFAULT_THEME_COLORS;
+    const currentPresetId = settings.theme_preset || 'apple';
+
+    const handleSelectPreset = (preset: ThemePreset) => {
+      const nextSettings: StoreSettings = {
+        ...settings,
+        theme_preset: preset.id,
+        custom_theme: { ...preset.colors },
+      };
+      setSettings(nextSettings);
+      showFeedback(`เลือกธีม ${preset.name} เรียบร้อยแล้ว ✨ (กด "บันทึกธีมร้าน" เพื่อใช้งานถาวร)`);
+    };
+
+    const handleColorChange = (key: keyof ThemeColors, val: string) => {
+      const nextSettings: StoreSettings = {
+        ...settings,
+        theme_preset: 'custom',
+        custom_theme: {
+          ...currentColors,
+          [key]: val,
+        },
+      };
+      setSettings(nextSettings);
+    };
+
+    const handleResetDefault = () => {
+      const nextSettings: StoreSettings = {
+        ...settings,
+        theme_preset: 'apple',
+        custom_theme: { ...DEFAULT_THEME_COLORS },
+      };
+      setSettings(nextSettings);
+      showFeedback('รีเซ็ตเป็นธีมดั้งเดิม (Apple Blossom) เรียบร้อยแล้วค่ะ');
+    };
+
+    const handleSaveTheme = async () => {
+      await handleSaveSettings();
+    };
+
+    return (
+      <div className="space-y-4 max-w-2xl pb-6">
+        {/* Header & Save Button */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-serif text-lg font-bold text-[#D06D80] flex items-center gap-2">
+              <Palette className="w-5 h-5 text-[#D06D80]" />
+              <span>ปรับแต่งธีม & โทนสีร้านค้า</span>
+            </h4>
+            <p className="text-xs text-[#947765]">
+              เลือกธีมสำเร็จรูปน่ารัก ๆ หรือผสมโค้ดสีเองได้ตามใจชอบแบบเรียลไทม์
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetDefault}
+              className="py-2 px-3 rounded-xl border border-[#F6B8C6] text-xs font-semibold text-[#543E30] hover:bg-[#FCE4EC] transition cursor-pointer flex items-center gap-1"
+              title="รีเซ็ตเป็นธีมเริ่มต้น"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#947765]" />
+              <span>รีเซ็ต</span>
+            </button>
+            <button
+              onClick={handleSaveTheme}
+              className="cta-btn py-2 px-4 text-xs font-semibold text-[#543E30] flex items-center gap-1.5 cursor-pointer shadow-md"
+            >
+              <Save className="w-4 h-4" />
+              <span>บันทึกธีมร้าน</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Preset Themes Grid */}
+        <div className="bg-[#FFFEFA] p-4 rounded-2xl border border-[#F6B8C6] shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h5 className="font-bold text-sm text-[#543E30] flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-[#D06D80]" />
+              <span>1. ธีมสำเร็จรูป (Presets แนะนำ)</span>
+            </h5>
+            <span className="text-[11px] text-[#947765]">คลิกเพื่อเปลี่ยนโทนสีทันที</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {THEME_PRESETS.map((preset) => {
+              const isSelected = currentPresetId === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleSelectPreset(preset)}
+                  className={`p-3 rounded-xl border text-left transition relative cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-[#D06D80] bg-[#FFF8EC] shadow-md ring-2 ring-[#F6B8C6]'
+                      : 'border-[#FCE4EC] bg-white hover:border-[#F6B8C6] hover:bg-[#FFFDF9]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-[#543E30]">
+                      <span className="text-base">{preset.emoji}</span>
+                      <span>{preset.name}</span>
+                    </div>
+                    {isSelected && (
+                      <span className="w-5 h-5 rounded-full bg-[#D06D80] text-white flex items-center justify-center text-[10px]">
+                        <Check className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#947765] line-clamp-2 mb-2.5">
+                    {preset.description}
+                  </p>
+                  {/* Color swatches */}
+                  <div className="flex items-center gap-1.5 pt-1.5 border-t border-stone-100">
+                    <span
+                      className="w-5 h-5 rounded-full border border-black/10 shadow-xs"
+                      style={{ backgroundColor: preset.colors.primary }}
+                      title={`Primary: ${preset.colors.primary}`}
+                    />
+                    <span
+                      className="w-5 h-5 rounded-full border border-black/10 shadow-xs"
+                      style={{ backgroundColor: preset.colors.primary_deep }}
+                      title={`Deep: ${preset.colors.primary_deep}`}
+                    />
+                    <span
+                      className="w-5 h-5 rounded-full border border-black/10 shadow-xs"
+                      style={{ backgroundColor: preset.colors.secondary }}
+                      title={`Secondary: ${preset.colors.secondary}`}
+                    />
+                    <span
+                      className="w-5 h-5 rounded-full border border-black/10 shadow-xs"
+                      style={{ backgroundColor: preset.colors.bg_vanilla }}
+                      title={`Background: ${preset.colors.bg_vanilla}`}
+                    />
+                    <span className="text-[10px] text-[#947765] ml-auto">
+                      {preset.isDark ? '🌙 โทนเข้ม' : '☀️ โทนสว่าง'}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Custom Color Pickers */}
+        <div className="bg-[#FFFEFA] p-4 rounded-2xl border border-[#F6B8C6] shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-[#F6B8C6]/30">
+            <div>
+              <h5 className="font-bold text-sm text-[#543E30] flex items-center gap-1.5">
+                <Palette className="w-4 h-4 text-[#D06D80]" />
+                <span>2. ผสมและเลือกสีเองได้อิสระ (Custom Colors)</span>
+              </h5>
+              <p className="text-[11px] text-[#947765]">
+                คลิกที่วงล้อสีเพื่อจิ้มเลือก หรือพิมพ์โค้ดสี HEX เช่น #F6B8C6 ได้เลยค่ะ
+              </p>
+            </div>
+            {currentPresetId === 'custom' && (
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#FCE4EC] text-[#D06D80] font-bold border border-[#F6B8C6]">
+                โหมดปรับแต่งสีเอง ✨
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* Primary Color */}
+            <div className="p-3 bg-[#FFF8EC]/60 rounded-xl border border-[#FCE4EC]">
+              <label className="text-xs font-semibold text-[#543E30] block mb-1">
+                🌟 สีหลัก (Primary Color)
+              </label>
+              <p className="text-[10px] text-[#947765] mb-2">
+                ใช้กับปุ่มสั่งซื้อหลัก, กรอบเน้น, ไฮไลท์
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={currentColors.primary}
+                  onChange={(e) => handleColorChange('primary', e.target.value)}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-[#F6B8C6] p-0.5 bg-white shrink-0"
+                />
+                <input
+                  type="text"
+                  value={currentColors.primary}
+                  onChange={(e) => handleColorChange('primary', e.target.value)}
+                  className="text-xs font-mono uppercase"
+                  placeholder="#F6B8C6"
+                />
+              </div>
+            </div>
+
+            {/* Primary Deep Color */}
+            <div className="p-3 bg-[#FFF8EC]/60 rounded-xl border border-[#FCE4EC]">
+              <label className="text-xs font-semibold text-[#543E30] block mb-1">
+                👑 สีหัวข้อ & ตัวหนังสือเด่น (Primary Deep)
+              </label>
+              <p className="text-[10px] text-[#947765] mb-2">
+                ใช้กับชื่อร้าน, หัวข้อหมวดหมู่, ตัวเลขราคา
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={currentColors.primary_deep}
+                  onChange={(e) => handleColorChange('primary_deep', e.target.value)}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-[#F6B8C6] p-0.5 bg-white shrink-0"
+                />
+                <input
+                  type="text"
+                  value={currentColors.primary_deep}
+                  onChange={(e) => handleColorChange('primary_deep', e.target.value)}
+                  className="text-xs font-mono uppercase"
+                  placeholder="#D06D80"
+                />
+              </div>
+            </div>
+
+            {/* Secondary Color */}
+            <div className="p-3 bg-[#FFF8EC]/60 rounded-xl border border-[#FCE4EC]">
+              <label className="text-xs font-semibold text-[#543E30] block mb-1">
+                🌿 สีรอง & เส้นคั่น (Secondary Color)
+              </label>
+              <p className="text-[10px] text-[#947765] mb-2">
+                ใช้กับปุ่มทางลัด (ดูคิว, รีวิว), เส้นแบ่งหมวดหมู่
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={currentColors.secondary}
+                  onChange={(e) => handleColorChange('secondary', e.target.value)}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-[#F6B8C6] p-0.5 bg-white shrink-0"
+                />
+                <input
+                  type="text"
+                  value={currentColors.secondary}
+                  onChange={(e) => handleColorChange('secondary', e.target.value)}
+                  className="text-xs font-mono uppercase"
+                  placeholder="#A8B99A"
+                />
+              </div>
+            </div>
+
+            {/* Background Color */}
+            <div className="p-3 bg-[#FFF8EC]/60 rounded-xl border border-[#FCE4EC]">
+              <label className="text-xs font-semibold text-[#543E30] block mb-1">
+                🍦 สีพื้นหลังร้าน (Background Tone)
+              </label>
+              <p className="text-[10px] text-[#947765] mb-2">
+                สีพื้นหลังหลักของร้านค้า
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={currentColors.bg_vanilla}
+                  onChange={(e) => handleColorChange('bg_vanilla', e.target.value)}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-[#F6B8C6] p-0.5 bg-white shrink-0"
+                />
+                <input
+                  type="text"
+                  value={currentColors.bg_vanilla}
+                  onChange={(e) => handleColorChange('bg_vanilla', e.target.value)}
+                  className="text-xs font-mono uppercase"
+                  placeholder="#FFF8EC"
+                />
+              </div>
+            </div>
+
+            {/* Text Deep Color */}
+            <div className="p-3 bg-[#FFF8EC]/60 rounded-xl border border-[#FCE4EC]">
+              <label className="text-xs font-semibold text-[#543E30] block mb-1">
+                🖋️ สีตัวหนังสือเนื้อหา (Text Color)
+              </label>
+              <p className="text-[10px] text-[#947765] mb-2">
+                สีข้อความ คำอธิบายสินค้า และรายละเอียด
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={currentColors.text_deep || '#543E30'}
+                  onChange={(e) => handleColorChange('text_deep', e.target.value)}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-[#F6B8C6] p-0.5 bg-white shrink-0"
+                />
+                <input
+                  type="text"
+                  value={currentColors.text_deep || '#543E30'}
+                  onChange={(e) => handleColorChange('text_deep', e.target.value)}
+                  className="text-xs font-mono uppercase"
+                  placeholder="#543E30"
+                />
+              </div>
+            </div>
+
+            {/* Light Tint Tone */}
+            <div className="p-3 bg-[#FFF8EC]/60 rounded-xl border border-[#FCE4EC]">
+              <label className="text-xs font-semibold text-[#543E30] block mb-1">
+                🌸 สีกล่องการ์ด / แบดจ์ (Light Tint)
+              </label>
+              <p className="text-[10px] text-[#947765] mb-2">
+                สีพื้นกล่องข้อความ, แบดจ์แจ้งเตือน, การ์ดรีวิว
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={currentColors.light_tone || '#FCE4EC'}
+                  onChange={(e) => handleColorChange('light_tone', e.target.value)}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-[#F6B8C6] p-0.5 bg-white shrink-0"
+                />
+                <input
+                  type="text"
+                  value={currentColors.light_tone || '#FCE4EC'}
+                  onChange={(e) => handleColorChange('light_tone', e.target.value)}
+                  className="text-xs font-mono uppercase"
+                  placeholder="#FCE4EC"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Mini Preview */}
+        <div className="bg-[#FFFEFA] p-4 rounded-2xl border border-[#F6B8C6] shadow-sm space-y-3">
+          <h5 className="font-bold text-sm text-[#543E30] flex items-center gap-1.5">
+            <Eye className="w-4 h-4 text-[#D06D80]" />
+            <span>3. ตัวอย่างหน้าร้านตามสีที่คุณเลือก (Live Preview)</span>
+          </h5>
+
+          <div
+            className="p-4 rounded-2xl border transition-all space-y-3 shadow-inner"
+            style={{
+              backgroundColor: currentColors.bg_vanilla,
+              borderColor: currentColors.primary,
+            }}
+          >
+            {/* Sample Title */}
+            <div className="text-center">
+              <h4
+                className="font-bold text-lg"
+                style={{ color: currentColors.primary_deep }}
+              >
+                {settings.shop_name || 'Auralune Tarot'}
+              </h4>
+              <p
+                className="text-xs"
+                style={{ color: currentColors.text_soft || currentColors.text_deep }}
+              >
+                {settings.shop_subtitle || 'ร้านดูดวงไพ่ทาโรต์ อบอุ่น สไตล์คอทเทจ'}
+              </p>
+            </div>
+
+            {/* Sample Buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition"
+                style={{
+                  backgroundColor: currentColors.bg_vanilla,
+                  borderColor: currentColors.secondary,
+                  borderWidth: '1.5px',
+                  color: currentColors.text_deep,
+                }}
+              >
+                🔮 เช็คคิวดูดวง
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition"
+                style={{
+                  backgroundColor: currentColors.bg_vanilla,
+                  borderColor: currentColors.secondary,
+                  borderWidth: '1.5px',
+                  color: currentColors.text_deep,
+                }}
+              >
+                ⭐ รีวิวจากลูกค้า
+              </button>
+            </div>
+
+            {/* Sample Package Card */}
+            <div
+              className="p-3 rounded-xl border flex items-center justify-between"
+              style={{
+                backgroundColor: currentPresetId === 'midnight' ? '#241E34' : '#FFFFFF',
+                borderColor: currentColors.primary,
+              }}
+            >
+              <div>
+                <div
+                  className="font-bold text-xs"
+                  style={{ color: currentColors.text_deep }}
+                >
+                  คำถามความรัก & การงาน 1 ข้อ
+                </div>
+                <div
+                  className="text-[10px]"
+                  style={{ color: currentColors.text_soft || currentColors.text_deep }}
+                >
+                  ตอบกระชับ ตรงประเด็น พร้อมคำแนะนำ
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs"
+                style={{
+                  background: `linear-gradient(135deg, ${currentColors.primary} 0%, ${currentColors.primary_deep} 100%)`,
+                  color: currentPresetId === 'midnight' ? '#FFFFFF' : currentColors.text_deep,
+                }}
+              >
+                ฿59 · สั่งซื้อ
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <button
+              onClick={handleSaveTheme}
+              className="cta-btn py-2.5 px-6 text-xs font-bold text-[#543E30] flex items-center gap-2 cursor-pointer shadow-md"
+            >
+              <Save className="w-4 h-4" />
+              <span>กดบันทึกธีมและสีร้านค้า</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Stats calculation
   const totalRevenue = orders
     .filter((o) => o.status === 'confirmed')
@@ -918,6 +1347,7 @@ export default function AdminDashboard({
             },
             { id: 'products' as const, label: 'สินค้า & หมวดหมู่', icon: <Package className="w-4 h-4" /> },
             { id: 'settings' as const, label: 'ตั้งค่าร้านค้า', icon: <Settings className="w-4 h-4" /> },
+            { id: 'theme' as const, label: 'ธีม & สีร้านค้า 🎨', icon: <Palette className="w-4 h-4" /> },
             { id: 'music' as const, label: 'จัดการเพลง', icon: <Music className="w-4 h-4" /> },
             { id: 'reviews' as const, label: `จัดการรีวิว (${reviews.length})`, icon: <Star className="w-4 h-4" /> },
           ].map((tab) => (
@@ -1760,6 +2190,29 @@ export default function AdminDashboard({
                     </div>
                   </div>
 
+                  {/* Theme & Colors Quick Card */}
+                  <div className="bg-[#FFFEFA] p-4 rounded-xl border border-[#F6B8C6] text-xs shadow-sm flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl">🎨</span>
+                      <div>
+                        <h5 className="font-bold text-sm text-[#D06D80]">
+                          ธีมและโทนสีร้านค้า
+                        </h5>
+                        <p className="text-[11px] text-[#947765]">
+                          เลือก 7 ธีมสำเร็จรูป หรือผสมโค้ดสีเองอิสระ (Live Preview)
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('theme')}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#F6B8C6] to-[#FCE4EC] hover:brightness-95 text-[#543E30] text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer shrink-0"
+                    >
+                      <Palette className="w-4 h-4 text-[#D06D80]" />
+                      <span>ปรับแต่งสีร้านค้า ✨</span>
+                    </button>
+                  </div>
+
                   <div className="space-y-3 bg-[#FFFEFA] p-4 rounded-xl border border-[#F6B8C6] text-xs shadow-sm">
                     <div>
                       <label className="text-[11px] text-[#543E30] font-medium block mb-1">
@@ -2121,6 +2574,9 @@ export default function AdminDashboard({
                   </div>
                 </div>
               )}
+
+              {/* TAB: THEME & COLOR CUSTOMIZER */}
+              {activeTab === 'theme' && renderThemePanel()}
 
               {/* TAB 6: MUSIC MANAGEMENT */}
               {activeTab === 'music' && (
