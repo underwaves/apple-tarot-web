@@ -30,8 +30,15 @@ import {
   LogOut,
   Camera,
   ImageIcon,
+  RotateCcw,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modals/ConfirmModal';
+import { compressImageToDataUrl } from '@/lib/image-client';
+
+const DEFAULT_BANNER =
+  'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1200&q=80';
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1568644396922-5c3bfae12521?auto=format&fit=crop&w=300&q=80';
 
 interface AdminDashboardProps {
   isOpen: boolean;
@@ -94,51 +101,55 @@ export default function AdminDashboard({
   const avatarFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [bannerLoadError, setBannerLoadError] = useState(false);
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
 
   const handleImageUpload = async (
     file: File,
     type: 'banner' | 'avatar'
   ) => {
     const isBanner = type === 'banner';
-    if (isBanner) setUploadingBanner(true);
-    else setUploadingAvatar(true);
-
-    // Instant local preview for immediate visual feedback
-    const previewUrl = URL.createObjectURL(file);
-    setSettings((prev) =>
-      prev
-        ? {
-            ...prev,
-            [isBanner ? 'banner_url' : 'avatar_url']: previewUrl,
-          }
-        : prev
-    );
+    if (isBanner) {
+      setUploadingBanner(true);
+      setBannerLoadError(false);
+    } else {
+      setUploadingAvatar(true);
+      setAvatarLoadError(false);
+    }
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('type', type);
+      // 1. Immediately compress in browser to an optimized Base64 Data URL (0 server disk dependency)
+      const dataUrl = await compressImageToDataUrl(
+        file,
+        isBanner ? 1200 : 400,
+        isBanner ? 500 : 400,
+        0.85
+      );
 
-      const res = await fetch('/api/upload/image', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'อัปโหลดรูปภาพไม่สำเร็จ');
-      }
-
+      // Immediately set the Data URL so preview works 100% reliably
       setSettings((prev) =>
         prev
           ? {
               ...prev,
-              [isBanner ? 'banner_url' : 'avatar_url']: data.url,
+              [isBanner ? 'banner_url' : 'avatar_url']: dataUrl,
             }
           : prev
       );
-      showFeedback(`อัปโหลดรูปภาพ${isBanner ? 'แบนเนอร์' : 'โปรไฟล์'}เรียบร้อยแล้ว ✨ อย่าลืมกดบันทึกการตั้งค่านะคะ`);
+
+      // 2. Also send to backend to store local copy and trigger any hooks
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', type);
+      fetch('/api/upload/image', {
+        method: 'POST',
+        body: formData,
+      }).catch((e) => console.warn('Background image sync fallback:', e));
+
+      showFeedback(
+        `อัปโหลดรูปภาพ${isBanner ? 'แบนเนอร์' : 'โปรไฟล์'}เรียบร้อยแล้ว ✨ อย่าลืมกด "บันทึกการตั้งค่าร้าน" ด้านล่างนะคะ`
+      );
     } catch (err: unknown) {
-      showFeedback(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอัปโหลด', true);
+      showFeedback(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการแปลงรูปภาพ', true);
     } finally {
       if (isBanner) setUploadingBanner(false);
       else setUploadingAvatar(false);
@@ -1359,12 +1370,13 @@ export default function AdminDashboard({
 
                           {/* Banner Preview */}
                           {settings.banner_url && (
-                            <div className="relative w-full h-28 sm:h-36 rounded-xl overflow-hidden mb-2.5 border border-[#F6B8C6] shadow-xs">
+                            <div className="relative w-full h-28 sm:h-36 rounded-xl overflow-hidden mb-2.5 border border-[#F6B8C6] shadow-xs bg-[#FFF8EC]">
                               <Image
-                                src={settings.banner_url}
+                                src={bannerLoadError ? DEFAULT_BANNER : settings.banner_url}
                                 alt="Banner Preview"
                                 fill
                                 unoptimized
+                                onError={() => setBannerLoadError(true)}
                                 className="object-cover"
                               />
                             </div>
@@ -1381,7 +1393,7 @@ export default function AdminDashboard({
                             }}
                           />
 
-                          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                          <div className="flex flex-wrap gap-2 items-center">
                             <button
                               type="button"
                               onClick={() => bannerFileInputRef.current?.click()}
@@ -1391,7 +1403,7 @@ export default function AdminDashboard({
                               {uploadingBanner ? (
                                 <>
                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  <span>กำลังอัปโหลด...</span>
+                                  <span>กำลังแปลงรูป...</span>
                                 </>
                               ) : (
                                 <>
@@ -1400,18 +1412,34 @@ export default function AdminDashboard({
                                 </>
                               )}
                             </button>
-                            <span className="text-[11px] text-[#947765] text-center sm:text-left">
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSettings({ ...settings, banner_url: DEFAULT_BANNER });
+                                setBannerLoadError(false);
+                                showFeedback('รีเซ็ตเป็นแบนเนอร์เริ่มต้นเรียบร้อยแล้วค่ะ');
+                              }}
+                              className="py-2 px-3 rounded-xl border border-[#F6B8C6]/60 bg-[#FFF8EC] text-[#543E30] hover:bg-[#FCE4EC] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                              title="รีเซ็ตกลับเป็นรูปเริ่มต้น"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5 text-[#947765]" />
+                              <span>ใช้รูปเริ่มต้น</span>
+                            </button>
+
+                            <span className="text-[11px] text-[#947765]">
                               หรือใส่ลิงก์ภาพโดยตรง
                             </span>
                           </div>
 
                           <input
                             type="text"
-                            placeholder="https://... หรือ /uploads/images/..."
+                            placeholder="https://... หรือ data:image/..."
                             value={settings.banner_url}
-                            onChange={(e) =>
-                              setSettings({ ...settings, banner_url: e.target.value })
-                            }
+                            onChange={(e) => {
+                              setSettings({ ...settings, banner_url: e.target.value });
+                              setBannerLoadError(false);
+                            }}
                             className="mt-2 text-xs font-mono"
                           />
                         </div>
@@ -1427,10 +1455,11 @@ export default function AdminDashboard({
                             <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-[#F6B8C6] shadow-xs bg-white shrink-0">
                               {settings.avatar_url ? (
                                 <Image
-                                  src={settings.avatar_url}
+                                  src={avatarLoadError ? DEFAULT_AVATAR : settings.avatar_url}
                                   alt="Avatar Preview"
                                   fill
                                   unoptimized
+                                  onError={() => setAvatarLoadError(true)}
                                   className="object-cover"
                                 />
                               ) : (
@@ -1440,7 +1469,7 @@ export default function AdminDashboard({
                               )}
                             </div>
 
-                            <div className="flex-1">
+                            <div className="flex-1 space-y-2">
                               <input
                                 type="file"
                                 ref={avatarFileInputRef}
@@ -1452,34 +1481,51 @@ export default function AdminDashboard({
                                 }}
                               />
 
-                              <button
-                                type="button"
-                                onClick={() => avatarFileInputRef.current?.click()}
-                                disabled={uploadingAvatar}
-                                className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#C9DDB8] to-[#FFF8EC] hover:brightness-95 text-[#543E30] text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50 w-full sm:w-auto"
-                              >
-                                {uploadingAvatar ? (
-                                  <>
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    <span>กำลังอัปโหลด...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Camera className="w-3.5 h-3.5 text-[#7D946D]" />
-                                    <span>📁 เลือกรูปโปรไฟล์จากเครื่อง</span>
-                                  </>
-                                )}
-                              </button>
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <button
+                                  type="button"
+                                  onClick={() => avatarFileInputRef.current?.click()}
+                                  disabled={uploadingAvatar}
+                                  className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#C9DDB8] to-[#FFF8EC] hover:brightness-95 text-[#543E30] text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
+                                >
+                                  {uploadingAvatar ? (
+                                    <>
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      <span>กำลังแปลงรูป...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Camera className="w-3.5 h-3.5 text-[#7D946D]" />
+                                      <span>📁 เลือกรูปโปรไฟล์จากเครื่อง</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSettings({ ...settings, avatar_url: DEFAULT_AVATAR });
+                                    setAvatarLoadError(false);
+                                    showFeedback('รีเซ็ตเป็นโปรไฟล์เริ่มต้นเรียบร้อยแล้วค่ะ');
+                                  }}
+                                  className="py-2 px-3 rounded-xl border border-[#F6B8C6]/60 bg-[#FFF8EC] text-[#543E30] hover:bg-[#FCE4EC] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                                  title="รีเซ็ตกลับเป็นรูปเริ่มต้น"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5 text-[#947765]" />
+                                  <span>ใช้รูปเริ่มต้น</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
 
                           <input
                             type="text"
-                            placeholder="https://... หรือ /uploads/images/..."
+                            placeholder="https://... หรือ data:image/..."
                             value={settings.avatar_url}
-                            onChange={(e) =>
-                              setSettings({ ...settings, avatar_url: e.target.value })
-                            }
+                            onChange={(e) => {
+                              setSettings({ ...settings, avatar_url: e.target.value });
+                              setAvatarLoadError(false);
+                            }}
                             className="text-xs font-mono"
                           />
                         </div>

@@ -98,9 +98,13 @@ export async function POST(req: Request) {
     fs.writeFileSync(filePath, buffer);
 
     const publicUrl = `/uploads/images/${safeFilename}`;
+    const base64Data = buffer.toString('base64');
+    const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
     return NextResponse.json({
       success: true,
-      url: publicUrl,
+      url: dataUrl, // Provide base64 data url to guarantee zero 404s on ephemeral hosting
+      localUrl: publicUrl,
       filename: safeFilename,
     });
   } catch (err: unknown) {
