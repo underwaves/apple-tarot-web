@@ -5,9 +5,13 @@ const DEFAULT_NEON_URL =
   'postgresql://neondb_owner:npg_mKdtEJSTQ67e@ep-autumn-bird-azteckwb-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
 
 const isExplicitLocal = process.env.LOCAL_DB_MODE === 'true';
+const hasSupabase = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project')
+);
 
-const connectionString = isExplicitLocal
-  ? ''
+const connectionString = isExplicitLocal || hasSupabase
+  ? (process.env.DATABASE_URL || '')
   : (process.env.DATABASE_URL || DEFAULT_NEON_URL);
 
 export const isNeonConfigured = Boolean(
