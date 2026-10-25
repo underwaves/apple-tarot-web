@@ -335,3 +335,34 @@ textarea:focus {
 ::-webkit-scrollbar-thumb:hover {
   background: #A8B99A;
 }
+
+/* Cottagecore Decorative Stickers Floating Animations */
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(3deg);
+  }
+}
+
+@keyframes float-gentle-reverse {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(-3deg);
+  }
+}
+
+.animate-float {
+  animation: float-gentle 4.5s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-gentle-reverse 5s ease-in-out infinite 0.7s;
+}
+
+.animate-float-slow {
+  animation: float-gentle 6s ease-in-out infinite 1.2s;
+}

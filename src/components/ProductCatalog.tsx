@@ -1,9 +1,19 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { Category, PackageItem } from '@/types';
 import { formatBaht } from '@/lib/utils';
 import { Check, Plus } from 'lucide-react';
+
+const CATEGORY_DECOR_ICONS = [
+  '/images/decorations/decor_apple_whole.png',
+  '/images/decorations/decor_pie_slice.png',
+  '/images/decorations/decor_jam_jar.png',
+  '/images/decorations/decor_juice_bottle.png',
+  '/images/decorations/decor_apple_glazed.png',
+  '/images/decorations/decor_apple_slice.png',
+];
 
 interface ProductCatalogProps {
   categories: Category[];
@@ -26,7 +36,16 @@ export default function ProductCatalog({
     <section className="mt-8 flex flex-col gap-8">
       {/* Store Closed Notice Banner */}
       {!isStoreOpen && (
-        <div className="p-4 bg-[#FCE4EC] border-2 border-[#F6B8C6] rounded-2xl text-center text-xs text-[#543E30] flex flex-col items-center gap-1.5 shadow-sm animate-in fade-in duration-200">
+        <div className="p-4 bg-[#FCE4EC] border-2 border-[#F6B8C6] rounded-2xl text-center text-xs text-[#543E30] flex flex-col items-center gap-2 shadow-sm animate-in fade-in duration-200">
+          <div className="w-12 h-12 relative animate-float">
+            <Image
+              src="/images/decorations/decor_jam_jar.png"
+              alt="store closed"
+              width={48}
+              height={48}
+              className="w-full h-full object-contain"
+            />
+          </div>
           <span className="font-bold text-[#D06D80] text-sm sm:text-base flex items-center gap-1.5">
             🔒 ขณะนี้ร้านปิดรับคิวชั่วคราว
           </span>
@@ -39,18 +58,26 @@ export default function ProductCatalog({
         </div>
       )}
 
-      {categories.map((category) => {
+      {categories.map((category, catIdx) => {
         const activePackages = category.packages.filter((p) => p.is_active);
         if (activePackages.length === 0) return null;
+
+        const decorIcon = CATEGORY_DECOR_ICONS[catIdx % CATEGORY_DECOR_ICONS.length];
 
         return (
           <div key={category.id} className="flex flex-col gap-3.5">
             {/* Category Header */}
             <div>
               <div className="category-header">
-                <span className="text-xl sm:text-2xl shrink-0" role="img" aria-label="apple-branch">
-                  🌿
-                </span>
+                <div className="w-6 h-6 sm:w-7 sm:h-7 shrink-0 relative">
+                  <Image
+                    src={decorIcon}
+                    alt="category decor"
+                    width={28}
+                    height={28}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
                 <span className="tracking-wide text-base sm:text-xl md:text-2xl font-bold text-[#543E30] break-words leading-tight">
                   {category.name}
                 </span>

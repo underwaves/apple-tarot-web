@@ -53,6 +53,28 @@ export default function Hero({
 
       {/* Avatar with Pastel Apple & Leaf Wreath Border */}
       <div className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-tr from-[#F6B8C6] via-[#C9DDB8] to-[#F6D1B5] shadow-lg">
+        {/* Cute Floating Left Sticker */}
+        <div className="absolute -left-5 sm:-left-7 top-1 w-9 h-9 sm:w-11 sm:h-11 pointer-events-none animate-float select-none drop-shadow-sm z-20">
+          <Image
+            src="/images/decorations/decor_jam_jar.png"
+            alt="jam jar"
+            width={44}
+            height={44}
+            className="w-full h-full object-contain"
+          />
+        </div>
+
+        {/* Cute Floating Right Sticker */}
+        <div className="absolute -right-5 sm:-right-7 top-0 w-9 h-9 sm:w-11 sm:h-11 pointer-events-none animate-float-delayed select-none drop-shadow-sm z-20">
+          <Image
+            src="/images/decorations/decor_pie_slice.png"
+            alt="pie slice"
+            width={44}
+            height={44}
+            className="w-full h-full object-contain"
+          />
+        </div>
+
         <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#FFFEFA] bg-[#FFF8EC] relative">
           <Image
             src={avatarSrc}
@@ -64,15 +86,35 @@ export default function Hero({
             className="w-full h-full object-cover"
           />
         </div>
-        <span className="absolute -bottom-1 -right-1 text-2xl sm:text-3xl select-none" role="img" aria-label="apple">
+        <span className="absolute -bottom-1 -right-1 text-2xl sm:text-3xl select-none z-10" role="img" aria-label="apple">
           🍎
         </span>
       </div>
 
-      {/* Shop Title */}
-      <h1 className="hero-title mt-3 tracking-wide">
-        {settings.shop_title || 'Auralune'}
-      </h1>
+      {/* Shop Title with Side Accents */}
+      <div className="relative mt-3">
+        <div className="hidden md:block absolute -left-12 top-1/2 -translate-y-1/2 w-8 h-8 pointer-events-none animate-float-slow select-none opacity-90">
+          <Image
+            src="/images/decorations/decor_apple_slice.png"
+            alt="apple slice"
+            width={32}
+            height={32}
+            className="w-full h-full object-contain"
+          />
+        </div>
+        <div className="hidden md:block absolute -right-12 top-1/2 -translate-y-1/2 w-8 h-10 pointer-events-none animate-float-delayed select-none opacity-90">
+          <Image
+            src="/images/decorations/decor_juice_bottle.png"
+            alt="juice bottle"
+            width={32}
+            height={40}
+            className="w-full h-full object-contain"
+          />
+        </div>
+        <h1 className="hero-title tracking-wide">
+          {settings.shop_title || 'Auralune'}
+        </h1>
+      </div>
 
       {/* Subtitle */}
       <p className="mt-2 text-xs sm:text-sm md:text-base text-[#947765] max-w-xl sm:max-w-2xl px-4 font-normal leading-relaxed opacity-95">

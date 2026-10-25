@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import AmbientCanvas from '@/components/AmbientCanvas';
 import MusicPlayer from '@/components/MusicPlayer';
 import Hero from '@/components/Hero';
@@ -417,8 +418,18 @@ export default function HomePage() {
         onDataUpdated={fetchStoreData}
       />
 
+      {/* Cottagecore Treats Decorative Ribbon */}
+      <div className="mt-14 mb-3 flex items-center justify-center gap-3 sm:gap-5 select-none opacity-85 pointer-events-none">
+        <Image src="/images/decorations/decor_apple_slice.png" alt="decor" width={32} height={32} className="animate-float" />
+        <Image src="/images/decorations/decor_jam_jar.png" alt="decor" width={32} height={32} className="animate-float-delayed" />
+        <Image src="/images/decorations/decor_apple_whole.png" alt="decor" width={32} height={32} className="animate-float-slow" />
+        <Image src="/images/decorations/decor_pie_slice.png" alt="decor" width={32} height={32} className="animate-float" />
+        <Image src="/images/decorations/decor_juice_bottle.png" alt="decor" width={28} height={36} className="animate-float-delayed" />
+        <Image src="/images/decorations/decor_apple_glazed.png" alt="decor" width={32} height={32} className="animate-float-slow" />
+      </div>
+
       {/* Footer */}
-      <footer className="mt-12 text-center text-xs text-[#947765] pb-12 sm:pb-6">
+      <footer className="text-center text-xs text-[#947765] pb-12 sm:pb-6">
         <p>© 2026 {settings?.shop_name || 'Auralune'} · All rights reserved.</p>
         <p className="mt-1 text-[11px] text-[#A8B99A]">
           Cottagecore Handcrafted with Love 🍎🌷
