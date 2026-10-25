@@ -4,10 +4,16 @@ import { neon } from '@neondatabase/serverless';
 const DEFAULT_NEON_URL =
   'postgresql://neondb_owner:npg_mKdtEJSTQ67e@ep-autumn-bird-azteckwb-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
 
-const connectionString = process.env.DATABASE_URL || DEFAULT_NEON_URL;
+const isExplicitLocal = process.env.LOCAL_DB_MODE === 'true';
+
+const connectionString = isExplicitLocal
+  ? ''
+  : (process.env.DATABASE_URL || DEFAULT_NEON_URL);
 
 export const isNeonConfigured = Boolean(
-  connectionString && connectionString.startsWith('postgres')
+  !isExplicitLocal &&
+  connectionString &&
+  connectionString.startsWith('postgres')
 );
 
 let sqlInstance: ReturnType<typeof neon> | null = null;

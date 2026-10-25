@@ -7,7 +7,11 @@ import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { dispatchShopNotification, formatSlipNotificationMessage } from '@/lib/notifications';
 
 // Store slips outside public directory to prevent direct execution / unauthenticated public scraping
-const SLIP_STORAGE_DIR = path.join(process.cwd(), 'data', 'uploads', 'slips');
+function getSlipStorageDir(): string {
+  return process.env.SLIP_STORAGE_DIR
+    ? path.resolve(process.env.SLIP_STORAGE_DIR)
+    : path.join(process.cwd(), 'data', 'uploads', 'slips');
+}
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 type ImageFormat = { ext: 'jpg' | 'png' | 'webp'; mime: string };
@@ -177,10 +181,11 @@ export async function POST(req: Request) {
     }
 
     if (!slipUrl) {
-      if (!fs.existsSync(SLIP_STORAGE_DIR)) {
-        fs.mkdirSync(SLIP_STORAGE_DIR, { recursive: true });
+      const storageDir = getSlipStorageDir();
+      if (!fs.existsSync(storageDir)) {
+        fs.mkdirSync(storageDir, { recursive: true });
       }
-      const filePath = path.join(SLIP_STORAGE_DIR, safeFilename);
+      const filePath = path.join(storageDir, safeFilename);
       fs.writeFileSync(filePath, fileBuffer);
 
       // Store Base64 Data URL directly into order.slip_url so slips are permanently

@@ -15,8 +15,17 @@ import {
 } from '@/types';
 import { generateOrderNo, generateTrackingToken } from './utils';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const DATA_FILE = path.join(DATA_DIR, 'store.json');
+function getDataDir(): string {
+  return process.env.DATA_DIR_PATH
+    ? path.resolve(process.env.DATA_DIR_PATH)
+    : path.join(process.cwd(), 'data');
+}
+
+function getDataFile(): string {
+  return process.env.DATA_FILE_PATH
+    ? path.resolve(process.env.DATA_FILE_PATH)
+    : path.join(getDataDir(), 'store.json');
+}
 
 export interface LocalDatabase {
   settings: StoreSettings;
@@ -148,6 +157,25 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
         },
       ],
     },
+    {
+      id: 'cat-3',
+      name: '🍎 สินค้ามงคลและของที่ระลึก (Physical Products)',
+      description: 'สินค้าจัดส่งถึงบ้าน ทั้งเทียนหอมอโรมา กล่องสุ่ม และเครื่องรางเสริมดวง',
+      sort_order: 3,
+      product_type: 'physical',
+      packages: [
+        {
+          id: 'pkg-apple-box',
+          category_id: 'cat-3',
+          name: 'กล่องสุ่ม Lucky Apple Box & เทียนหอม',
+          description: 'กล่องสุ่มของมงคลนำโชคและเทียนหอมอโรมากลิ่นแอปเปิ้ล จัดส่งพร้อมแพ็กเกจน่ารัก',
+          price: 199,
+          badge: '199.-',
+          is_active: true,
+          product_type: 'physical',
+        },
+      ],
+    },
   ],
   orders: [],
   queues: [],
@@ -200,14 +228,17 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
 };
 
 export function readLocalDb(): LocalDatabase {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  const dataDir = getDataDir();
+  const dataFile = getDataFile();
+
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
   }
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(DEFAULT_STORE_DATA, null, 2), 'utf-8');
+  if (!fs.existsSync(dataFile)) {
+    fs.writeFileSync(dataFile, JSON.stringify(DEFAULT_STORE_DATA, null, 2), 'utf-8');
     return DEFAULT_STORE_DATA;
   }
-  const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+  const raw = fs.readFileSync(dataFile, 'utf-8');
   try {
     const parsed = JSON.parse(raw);
     const parsedSettings = parsed.settings || {};
@@ -232,13 +263,16 @@ export function readLocalDb(): LocalDatabase {
 }
 
 export function writeLocalDb(data: LocalDatabase): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  const dataDir = getDataDir();
+  const dataFile = getDataFile();
+
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
   }
-  const tempFile = `${DATA_FILE}.${Date.now()}.${Math.random().toString(36).substring(2, 7)}.tmp`;
+  const tempFile = `${dataFile}.${Date.now()}.${Math.random().toString(36).substring(2, 7)}.tmp`;
   try {
     fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempFile, DATA_FILE);
+    fs.renameSync(tempFile, dataFile);
   } catch (err) {
     if (fs.existsSync(tempFile)) {
       try {

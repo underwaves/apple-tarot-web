@@ -52,9 +52,6 @@ import {
   Copy,
   Send,
   HelpCircle,
-  Info,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 import { compressImageToDataUrl } from '@/lib/image-client';
@@ -64,6 +61,20 @@ const DEFAULT_BANNER =
   'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1200&q=80';
 const DEFAULT_AVATAR =
   'https://images.unsplash.com/photo-1568644396922-5c3bfae12521?auto=format&fit=crop&w=300&q=80';
+
+function createReviewRecord(
+  customer_name: string,
+  rating: number,
+  comment: string
+): Review {
+  return {
+    id: `rev-${Date.now()}`,
+    customer_name,
+    rating,
+    comment,
+    created_at: new Date().toISOString(),
+  };
+}
 
 interface AdminDashboardProps {
   isOpen: boolean;
@@ -866,13 +877,11 @@ export default function AdminDashboard({
       showFeedback('กรุณากรอกชื่อลูกค้าและข้อความรีวิวค่ะ', true);
       return;
     }
-    const rev: Review = {
-      id: 'rev-' + Date.now(),
-      customer_name: newReviewAuthor.trim(),
-      rating: newReviewRating,
-      comment: newReviewComment.trim(),
-      created_at: new Date().toISOString(),
-    };
+    const rev = createReviewRecord(
+      newReviewAuthor.trim(),
+      newReviewRating,
+      newReviewComment.trim()
+    );
 
     const nextReviews = [rev, ...reviews];
     setReviews(nextReviews);
@@ -3597,7 +3606,7 @@ export default function AdminDashboard({
                   <div className="space-y-3">
                     {reviews.length === 0 ? (
                       <div className="p-8 text-center text-xs text-[#947765] bg-[#FFF8EC] rounded-xl border border-dashed border-[#F6B8C6]">
-                        ยังไม่มีรีวิวในระบบ สามารถกด "เพิ่มรีวิวใหม่" ด้านบนได้เลยค่ะ
+                        ยังไม่มีรีวิวในระบบ สามารถกด &quot;เพิ่มรีวิวใหม่&quot; ด้านบนได้เลยค่ะ
                       </div>
                     ) : (
                       reviews.map((rev, idx) => (

@@ -43,46 +43,58 @@ export default function PaymentModal({
   });
 
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [dynamicQrUrl, setDynamicQrUrl] = useState<string>('');
-  const [cardDownloadUrl, setCardDownloadUrl] = useState<string>('');
-  const [isGeneratingQr, setIsGeneratingQr] = useState<boolean>(true);
+  const [qrState, setQrState] = useState<{
+    key: string;
+    qrUrl: string;
+    cardUrl: string;
+  }>({ key: '', qrUrl: '', cardUrl: '' });
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
+
+  const promptpayTarget = settings.promptpay_id || '0968895279';
+  const accountName = settings.account_name || 'ด.ญ. ณัฐธยาน์ ขันทอง';
+  const qrKey =
+    isOpen && order
+      ? `${order.order_no}:${order.total_amount}:${promptpayTarget}:${accountName}`
+      : '';
+  const isGeneratingQr = Boolean(qrKey && qrState.key !== qrKey);
+  const dynamicQrUrl = qrState.key === qrKey ? qrState.qrUrl : '';
+  const cardDownloadUrl = qrState.key === qrKey ? qrState.cardUrl : '';
 
   // Generate PromptPay Dynamic QR with locked amount
   useEffect(() => {
     if (!isOpen || !order) return;
     let ignore = false;
-    setIsGeneratingQr(true);
-    setDownloadSuccess(false);
+    const currentKey = `${order.order_no}:${order.total_amount}:${promptpayTarget}:${accountName}`;
 
-    const target = settings.promptpay_id || '0968895279';
-    createPromptPayCardDataUrl(target, order.total_amount, {
-      accountName: settings.account_name || 'ด.ญ. ณัฐธยาน์ ขันทอง',
+    createPromptPayCardDataUrl(promptpayTarget, order.total_amount, {
+      accountName,
       orderNo: order.order_no,
     })
       .then(({ qrDataUrl, cardDataUrl }) => {
         if (!ignore) {
-          setDynamicQrUrl(qrDataUrl);
-          setCardDownloadUrl(cardDataUrl);
-          setIsGeneratingQr(false);
+          setQrState({
+            key: currentKey,
+            qrUrl: qrDataUrl,
+            cardUrl: cardDataUrl,
+          });
         }
       })
       .catch((err) => {
         console.error('Failed to generate PromptPay dynamic QR:', err);
-        if (!ignore) setIsGeneratingQr(false);
+        if (!ignore) {
+          setQrState({
+            key: currentKey,
+            qrUrl: '',
+            cardUrl: '',
+          });
+        }
       });
 
     return () => {
       ignore = true;
     };
-  }, [
-    isOpen,
-    order?.order_no,
-    order?.total_amount,
-    settings.promptpay_id,
-    settings.account_name,
-  ]);
+  }, [isOpen, order, promptpayTarget, accountName]);
 
   const copyText = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -238,9 +250,12 @@ export default function PaymentModal({
                     <span>กำลังสร้าง QR ล็อคยอดเงิน...</span>
                   </div>
                 ) : dynamicQrUrl ? (
-                  <img
+                  <Image
                     src={dynamicQrUrl}
                     alt="PromptPay Dynamic QR Code"
+                    width={224}
+                    height={224}
+                    unoptimized
                     className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
                   />
                 ) : (

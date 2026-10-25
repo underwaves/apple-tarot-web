@@ -4,7 +4,11 @@ import path from 'path';
 import { verifyAdminSession } from '@/lib/auth';
 import { getAllOrders } from '@/lib/db';
 
-const SLIP_STORAGE_DIR = path.join(process.cwd(), 'data', 'uploads', 'slips');
+function getSlipStorageDir(): string {
+  return process.env.SLIP_STORAGE_DIR
+    ? path.resolve(process.env.SLIP_STORAGE_DIR)
+    : path.join(process.cwd(), 'data', 'uploads', 'slips');
+}
 
 export async function GET(
   req: Request,
@@ -19,7 +23,7 @@ export async function GET(
     }
 
     const safeBase = path.basename(filename);
-    const filePath = path.join(SLIP_STORAGE_DIR, safeBase);
+    const filePath = path.join(getSlipStorageDir(), safeBase);
 
     if (!fs.existsSync(filePath)) {
       return NextResponse.json({ success: false, error: 'Slip not found' }, { status: 404 });

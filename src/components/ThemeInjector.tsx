@@ -12,7 +12,7 @@ export default function ThemeInjector({ settings }: ThemeInjectorProps) {
   const css = useMemo(() => {
     const { colors, isDark } = resolveThemeColors(settings);
     return generateThemeCSS(colors, isDark);
-  }, [settings?.theme_preset, settings?.custom_theme]);
+  }, [settings]);
 
   return <style id="shop-dynamic-theme" dangerouslySetInnerHTML={{ __html: css }} />;
 }

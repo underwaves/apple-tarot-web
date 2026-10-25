@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyAdminSession } from '@/lib/auth';
-import { dispatchShopNotification, sendLinePushMessage, sendWebhookMessage } from '@/lib/notifications';
-import { StoreSettings } from '@/types';
+import { sendLinePushMessage, sendWebhookMessage } from '@/lib/notifications';
 
 export async function POST(req: Request) {
   try {

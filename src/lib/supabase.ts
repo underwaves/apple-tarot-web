@@ -4,7 +4,10 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+const isExplicitLocal = process.env.LOCAL_DB_MODE === 'true';
+
 export const isSupabaseConfigured = Boolean(
+  !isExplicitLocal &&
   supabaseUrl &&
   supabaseAnonKey &&
   !supabaseUrl.includes('your-project')

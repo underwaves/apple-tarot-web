@@ -25,16 +25,14 @@ export default function Hero({
   onOpenContact,
   onOpenAdmin,
 }: HeroProps) {
-  const [bannerSrc, setBannerSrc] = React.useState(settings.banner_url || DEFAULT_BANNER);
-  const [avatarSrc, setAvatarSrc] = React.useState(settings.avatar_url || DEFAULT_AVATAR);
+  const [failedBannerUrl, setFailedBannerUrl] = React.useState<string | null>(null);
+  const [failedAvatarUrl, setFailedAvatarUrl] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    setBannerSrc(settings.banner_url || DEFAULT_BANNER);
-  }, [settings.banner_url]);
+  const targetBanner = settings.banner_url || DEFAULT_BANNER;
+  const bannerSrc = failedBannerUrl === targetBanner ? DEFAULT_BANNER : targetBanner;
 
-  React.useEffect(() => {
-    setAvatarSrc(settings.avatar_url || DEFAULT_AVATAR);
-  }, [settings.avatar_url]);
+  const targetAvatar = settings.avatar_url || DEFAULT_AVATAR;
+  const avatarSrc = failedAvatarUrl === targetAvatar ? DEFAULT_AVATAR : targetAvatar;
 
   return (
     <header className="relative text-center pt-2 pb-6 flex flex-col items-center">
@@ -45,7 +43,7 @@ export default function Hero({
           alt={settings.shop_name}
           fill
           unoptimized
-          onError={() => setBannerSrc(DEFAULT_BANNER)}
+          onError={() => setFailedBannerUrl(targetBanner)}
           className="w-full h-full object-cover filter brightness-[0.98]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#FFF8EC]/80 via-transparent to-transparent" />
@@ -82,7 +80,7 @@ export default function Hero({
             width={128}
             height={128}
             unoptimized
-            onError={() => setAvatarSrc(DEFAULT_AVATAR)}
+            onError={() => setFailedAvatarUrl(targetAvatar)}
             className="w-full h-full object-cover"
           />
         </div>
