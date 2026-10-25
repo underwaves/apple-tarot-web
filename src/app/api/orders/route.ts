@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createOrder, getAllOrders, getOrder } from '@/lib/db';
+import { createOrder, getAllOrders, getOrder, deleteOrder, clearAllOrders } from '@/lib/db';
 import { verifyAdminSession } from '@/lib/auth';
 
 export async function GET(req: Request) {
@@ -104,6 +104,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, order });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const isAdmin = await verifyAdminSession(req);
+    if (!isAdmin) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: จำเป็นต้องเข้าสู่ระบบหลังบ้านเพื่อลบประวัติออเดอร์' },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const orderNo = searchParams.get('order_no');
+    const orderId = searchParams.get('id');
+    const clearAll = searchParams.get('clear_all') === 'true';
+
+    if (clearAll) {
+      await clearAllOrders();
+      return NextResponse.json({ success: true, message: 'ล้างประวัติคำสั่งซื้อทั้งหมดเรียบร้อยแล้ว' });
+    }
+
+    const target = orderNo || orderId;
+    if (!target) {
+      return NextResponse.json({ success: false, error: 'กรุณาระบุหมายเลขออเดอร์ที่ต้องการลบ' }, { status: 400 });
+    }
+
+    await deleteOrder(target);
+    return NextResponse.json({ success: true, message: `ลบออเดอร์ ${target} สำเร็จเรียบร้อยแล้ว` });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการลบออเดอร์';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

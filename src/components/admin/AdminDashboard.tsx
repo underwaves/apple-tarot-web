@@ -430,6 +430,66 @@ export default function AdminDashboard({
     }
   };
 
+  // Delete single order
+  const handleDeleteOrder = (orderNo: string, customerName: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'ยืนยันการลบประวัติคำสั่งซื้อ',
+      message: `ต้องการลบออเดอร์ "${orderNo}" ของคุณ "${customerName}" ออกจากระบบหรือไม่? ยอดขายจะถูกคำนวณใหม่ตามจริง`,
+      confirmText: 'ลบออเดอร์นี้',
+      cancelText: 'ยกเลิก',
+      variant: 'danger',
+      icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/orders?order_no=${encodeURIComponent(orderNo)}`, {
+            method: 'DELETE',
+          });
+          const data = await res.json();
+          if (data.success) {
+            setOrders((prev) => prev.filter((o) => o.order_no !== orderNo && o.id !== orderNo));
+            showFeedback(`ลบออเดอร์ ${orderNo} สำเร็จแล้วค่ะ ✓`);
+            if (onDataUpdated) onDataUpdated();
+          } else {
+            showFeedback(data.error || 'ลบออเดอร์ไม่สำเร็จ', true);
+          }
+        } catch {
+          showFeedback('เกิดข้อผิดพลาดในการลบออเดอร์', true);
+        }
+      },
+    });
+  };
+
+  // Clear all orders (Reset to 0)
+  const handleClearAllOrders = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'ยืนยันการล้างประวัติออเดอร์ทั้งหมด',
+      message: 'ต้องการล้างประวัติคำสั่งซื้อทั้งหมดเพื่อให้ยอดขายเริ่มนับใหม่ตามจริง (฿0) หรือไม่? การลบนี้ไม่สามารถกู้คืนได้',
+      confirmText: 'ล้างประวัติทั้งหมด',
+      cancelText: 'ยกเลิก',
+      variant: 'danger',
+      icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/orders?clear_all=true', {
+            method: 'DELETE',
+          });
+          const data = await res.json();
+          if (data.success) {
+            setOrders([]);
+            showFeedback('ล้างประวัติคำสั่งซื้อทั้งหมดเรียบร้อยแล้ว ยอดขายรีเซ็ตตามจริงค่ะ ✓');
+            if (onDataUpdated) onDataUpdated();
+          } else {
+            showFeedback(data.error || 'ล้างประวัติไม่สำเร็จ', true);
+          }
+        } catch {
+          showFeedback('เกิดข้อผิดพลาดในการล้างประวัติออเดอร์', true);
+        }
+      },
+    });
+  };
+
   // Update queue status
   const handleUpdateQueue = async (
     queueId: string,
@@ -897,13 +957,25 @@ export default function AdminDashboard({
               {/* TAB 2: ORDERS & SLIPS */}
               {activeTab === 'orders' && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-serif text-lg font-bold text-[#D06D80]">
-                      จัดการคำสั่งซื้อและตรวจสลิป ({orders.length})
-                    </h4>
-                    <span className="text-xs text-[#947765]">
-                      กด &quot;ยืนยันชำระเงิน&quot; เพื่อดึงเข้าคิวอัตโนมัติ
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-serif text-lg font-bold text-[#D06D80]">
+                        จัดการคำสั่งซื้อและตรวจสลิป ({orders.length})
+                      </h4>
+                      <p className="text-xs text-[#947765]">
+                        กด &quot;ยืนยันชำระเงิน&quot; เพื่อดึงเข้าคิวอัตโนมัติ หรือกดไอคอนถังขยะเพื่อลบประวัติ
+                      </p>
+                    </div>
+                    {orders.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearAllOrders}
+                        className="secondary-btn py-1.5 px-3 text-xs text-[#D06D80] border-[#F6B8C6] hover:bg-[#FCE4EC] flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>ล้างประวัติทั้งหมด</span>
+                      </button>
+                    )}
                   </div>
 
                   {orders.length === 0 ? (
@@ -1046,10 +1118,11 @@ export default function AdminDashboard({
                               <span className="text-xs text-stone-400">ยังไม่มีสลิป</span>
                             )}
 
-                            {/* Verification Button */}
+                            {/* Verification Button & Delete */}
                             <div className="flex items-center gap-2">
                               {o.status !== 'confirmed' && (
                                 <button
+                                  type="button"
                                   onClick={() => handleConfirmPayment(o.id)}
                                   className="cta-btn py-2 px-3 text-xs font-semibold text-[#543E30] flex items-center gap-1.5 cursor-pointer shadow-md"
                                 >
@@ -1057,6 +1130,14 @@ export default function AdminDashboard({
                                   <span>ยืนยันชำระเงิน & เข้าคิว</span>
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteOrder(o.order_no, o.customer_name)}
+                                className="p-2 text-[#D06D80] hover:bg-[#FCE4EC] rounded-lg border border-transparent hover:border-[#F6B8C6]/50 transition cursor-pointer"
+                                title="ลบประวัติออเดอร์นี้"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                         </div>

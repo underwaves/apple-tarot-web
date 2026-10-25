@@ -709,6 +709,44 @@ export async function getAllOrders(): Promise<Order[]> {
   return local.orders;
 }
 
+export async function deleteOrder(orderIdOrNo: string): Promise<boolean> {
+  if (isNeonConfigured) {
+    let orders = await neonGet<Order[]>('orders', []);
+    orders = orders.filter((o) => o.id !== orderIdOrNo && o.order_no !== orderIdOrNo);
+    await neonSet('orders', orders);
+
+    try {
+      const local = readLocalDb();
+      local.orders = local.orders.filter((o) => o.id !== orderIdOrNo && o.order_no !== orderIdOrNo);
+      writeLocalDb(local);
+    } catch {}
+
+    return true;
+  }
+
+  const local = readLocalDb();
+  local.orders = local.orders.filter((o) => o.id !== orderIdOrNo && o.order_no !== orderIdOrNo);
+  writeLocalDb(local);
+  return true;
+}
+
+export async function clearAllOrders(): Promise<boolean> {
+  if (isNeonConfigured) {
+    await neonSet('orders', []);
+    try {
+      const local = readLocalDb();
+      local.orders = [];
+      writeLocalDb(local);
+    } catch {}
+    return true;
+  }
+
+  const local = readLocalDb();
+  local.orders = [];
+  writeLocalDb(local);
+  return true;
+}
+
 export async function getAllQueues(): Promise<QueueItem[]> {
   if (isNeonConfigured) {
     const queues = await neonGet<QueueItem[]>('queues', []);
