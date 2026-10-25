@@ -103,6 +103,17 @@ export default function AdminDashboard({
     if (isBanner) setUploadingBanner(true);
     else setUploadingAvatar(true);
 
+    // Instant local preview for immediate visual feedback
+    const previewUrl = URL.createObjectURL(file);
+    setSettings((prev) =>
+      prev
+        ? {
+            ...prev,
+            [isBanner ? 'banner_url' : 'avatar_url']: previewUrl,
+          }
+        : prev
+    );
+
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -125,7 +136,7 @@ export default function AdminDashboard({
             }
           : prev
       );
-      showFeedback(`อัปโหลดรูปภาพ${isBanner ? 'แบนเนอร์' : 'โปรไฟล์'}เรียบร้อยแล้ว ✨`);
+      showFeedback(`อัปโหลดรูปภาพ${isBanner ? 'แบนเนอร์' : 'โปรไฟล์'}เรียบร้อยแล้ว ✨ อย่าลืมกดบันทึกการตั้งค่านะคะ`);
     } catch (err: unknown) {
       showFeedback(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอัปโหลด', true);
     } finally {

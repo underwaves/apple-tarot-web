@@ -13,6 +13,11 @@ interface HeroProps {
   onOpenAdmin: () => void;
 }
 
+const DEFAULT_BANNER =
+  'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1200&q=80';
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1568644396922-5c3bfae12521?auto=format&fit=crop&w=300&q=80';
+
 export default function Hero({
   settings,
   onOpenQueue,
@@ -20,15 +25,27 @@ export default function Hero({
   onOpenContact,
   onOpenAdmin,
 }: HeroProps) {
+  const [bannerSrc, setBannerSrc] = React.useState(settings.banner_url || DEFAULT_BANNER);
+  const [avatarSrc, setAvatarSrc] = React.useState(settings.avatar_url || DEFAULT_AVATAR);
+
+  React.useEffect(() => {
+    setBannerSrc(settings.banner_url || DEFAULT_BANNER);
+  }, [settings.banner_url]);
+
+  React.useEffect(() => {
+    setAvatarSrc(settings.avatar_url || DEFAULT_AVATAR);
+  }, [settings.avatar_url]);
+
   return (
     <header className="relative text-center pt-2 pb-6 flex flex-col items-center">
       {/* Banner with Soft Pastel Frame */}
       <div className="w-full h-36 sm:h-48 md:h-56 rounded-2xl sm:rounded-3xl overflow-hidden relative shadow-md border border-[#F6B8C6]/50 mb-[-46px] sm:mb-[-56px] md:mb-[-62px]">
         <Image
-          src={settings.banner_url || 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1200&q=80'}
+          src={bannerSrc}
           alt={settings.shop_name}
           fill
           unoptimized
+          onError={() => setBannerSrc(DEFAULT_BANNER)}
           className="w-full h-full object-cover filter brightness-[0.98]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#FFF8EC]/80 via-transparent to-transparent" />
@@ -38,11 +55,12 @@ export default function Hero({
       <div className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-tr from-[#F6B8C6] via-[#C9DDB8] to-[#F6D1B5] shadow-lg">
         <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#FFFEFA] bg-[#FFF8EC] relative">
           <Image
-            src={settings.avatar_url || 'https://images.unsplash.com/photo-1568644396922-5c3bfae12521?auto=format&fit=crop&w=300&q=80'}
+            src={avatarSrc}
             alt="Store Avatar"
             width={128}
             height={128}
             unoptimized
+            onError={() => setAvatarSrc(DEFAULT_AVATAR)}
             className="w-full h-full object-cover"
           />
         </div>
