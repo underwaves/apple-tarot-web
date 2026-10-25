@@ -53,7 +53,7 @@ export default function Hero({
 
       {/* Shop Title */}
       <h1 className="hero-title mt-3 tracking-wide">
-        {settings.shop_title || 'ชื่อร้าน'}
+        {settings.shop_title || 'Auralune'}
       </h1>
 
       {/* Subtitle */}

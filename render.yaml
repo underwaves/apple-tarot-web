@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: apple-tarot-web
+    name: auralune-web
     runtime: node
     plan: free
     region: singapore

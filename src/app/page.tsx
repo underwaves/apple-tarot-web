@@ -401,7 +401,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="mt-12 text-center text-xs text-[#947765] pb-12 sm:pb-6">
-        <p>© 2026 {settings?.shop_name || 'Apple Orchard Studio'} · All rights reserved.</p>
+        <p>© 2026 {settings?.shop_name || 'Auralune'} · All rights reserved.</p>
         <p className="mt-1 text-[11px] text-[#A8B99A]">
           Cottagecore Handcrafted with Love 🍎🌷
         </p>

@@ -1,7 +1,7 @@
 {
   "settings": {
-    "shop_name": "Apple Tarot Studio",
-    "shop_title": "ดูดวงไพ่ทาโรต์ สวนแอปเปิ้ลพยากรณ์",
+    "shop_name": "Auralune",
+    "shop_title": "Auralune · ดูดวงไพ่ทาโรต์พยากรณ์",
     "shop_subtitle": "เปิดไพ่ฮีลใจ แม่นยำ ตรงไปตรงมา · คำถามทั่วไป คำถามเจาะจง ดูดวงแบบโทรสด",
     "banner_url": "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1200&q=80",
     "avatar_url": "https://images.unsplash.com/photo-1568644396922-5c3bfae12521?auto=format&fit=crop&w=300&q=80",
@@ -17,17 +17,17 @@
     "socials": [
       {
         "type": "LINE",
-        "name": "@fortune_apple",
+        "name": "@auralune",
         "url": "https://line.me"
       },
       {
         "type": "Instagram",
-        "name": "@apple.tarot.cute",
+        "name": "@auralune.tarot",
         "url": "https://instagram.com"
       },
       {
         "type": "Facebook",
-        "name": "ชื่อร้าน ดูดวงสวนแอปเปิ้ล",
+        "name": "Auralune ดูดวงไพ่ทาโรต์",
         "url": "https://facebook.com"
       }
     ],
@@ -49,7 +49,7 @@
   "categories": [
     {
       "id": "cat-1",
-      "name": "🔮 ดูดวงตอบคำถาม (ไพ่ทาโรต์สวนแอปเปิ้ล)",
+      "name": "🔮 ดูดวงตอบคำถาม (ไพ่ทาโรต์ Auralune)",
       "description": "เปิดไพ่ตอบตรงประเด็น ชัดเจน พร้อมคำแนะนำและทางออกที่ดีที่สุด",
       "sort_order": 1,
       "product_type": "fortune",
@@ -128,14 +128,14 @@
     {
       "id": "cat-3",
       "name": "🍎 เสริมดวง & วัตถุมงคล (Lucky Charms & Merchandise)",
-      "description": "ของมงคลนำโชคและวอลเปเปอร์เสริมดวงสไตล์สวนแอปเปิ้ล",
+      "description": "ของมงคลนำโชคและวอลเปเปอร์เสริมดวงสไตล์ Auralune",
       "sort_order": 3,
       "product_type": "physical",
       "packages": [
         {
           "id": "pkg-7",
           "category_id": "cat-3",
-          "name": "วอลเปเปอร์มือถือเสริมดวง สวนแอปเปิ้ล (Digital Wallpaper)",
+          "name": "วอลเปเปอร์มือถือเสริมดวง Auralune (Digital Wallpaper)",
           "description": "จัดวางไพ่มงคลและเลขศาสตร์ตามดวงวันเกิด ภาพประกอบคอตเทจคอร์สุดคิ้วท์",
           "price": 59,
           "badge": "Digital 📱",
@@ -157,6 +157,33 @@
     }
   ],
   "orders": [
+    {
+      "id": "ord-1792921415935-ahel2",
+      "order_no": "APL-261025-706AF7",
+      "tracking_token": "trk_6715b19eb69d7c759dab0d08",
+      "order_type": "fortune",
+      "customer_name": "sfwsf",
+      "question": "wefwefwef",
+      "customer_note": "wefwefwef",
+      "contact_channel": "LINE",
+      "contact_value": "wfwef",
+      "items": [
+        {
+          "id": "pkg-1",
+          "name": "คำถามทั่วไป (เปิดไพ่ทาโรต์)",
+          "price": 15,
+          "quantity": 1,
+          "desc": "ถามเรื่องทั่วไป 1 ข้อ ตอบกระชับ ชัดเจน พร้อมคำแนะนำ",
+          "product_type": "fortune"
+        }
+      ],
+      "total_amount": 32,
+      "is_express": true,
+      "express_fee": 17,
+      "status": "pending_slip",
+      "created_at": "2026-10-25T09:43:35.935Z",
+      "updated_at": "2026-10-25T09:43:35.935Z"
+    },
     {
       "id": "ord-1792919562989-m0v5h",
       "order_no": "APL-261025-5B6F3A",

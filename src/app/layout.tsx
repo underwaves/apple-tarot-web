@@ -17,8 +17,8 @@ const mali = Mali({
 });
 
 export const metadata: Metadata = {
-  title: 'ชื่อร้าน · ดูดวงไพ่ทาโรต์ สวนแอปเปิ้ล',
-  description: 'เว็บดูดวงไพ่ทาโรต์ ธีมสวนแอปเปิ้ล น่ารัก อบอุ่น สไตล์ Kawaii Cottagecore สั่งซื้อแพ็กเกจดูดวง ตรวจสอบสลิป และติดตามคิวคำทำนาย',
+  title: 'Auralune · ร้านดูดวงไพ่ทาโรต์',
+  description: 'Auralune - เว็บดูดวงไพ่ทาโรต์ น่ารัก อบอุ่น สไตล์ Kawaii Cottagecore สั่งซื้อแพ็กเกจดูดวง ตรวจสอบสลิป และติดตามคิวคำทำนาย',
 };
 
 export const viewport: Viewport = {

@@ -28,8 +28,8 @@ export interface LocalDatabase {
 
 export const DEFAULT_STORE_DATA: LocalDatabase = {
   settings: {
-    shop_name: 'Apple Tarot Studio',
-    shop_title: 'ดูดวงไพ่ทาโรต์ สวนแอปเปิ้ลพยากรณ์',
+    shop_name: 'Auralune',
+    shop_title: 'Auralune · ดูดวงไพ่ทาโรต์พยากรณ์',
     shop_subtitle: 'เปิดไพ่ฮีลใจ แม่นยำ ตรงไปตรงมา · คำถามทั่วไป คำถามเจาะจง ดูดวงแบบโทรสด',
     banner_url: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1200&q=80',
     avatar_url: 'https://images.unsplash.com/photo-1568644396922-5c3bfae12521?auto=format&fit=crop&w=300&q=80',
@@ -41,9 +41,9 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
     qr_image_url: '/images/kbank_qr.png',
     contacts: [{ label: 'LINE Official', url: 'https://line.me' }],
     socials: [
-      { type: 'LINE', name: '@fortune_apple', url: 'https://line.me' },
-      { type: 'Instagram', name: '@apple.tarot.cute', url: 'https://instagram.com' },
-      { type: 'Facebook', name: 'ชื่อร้าน ดูดวงสวนแอปเปิ้ล', url: 'https://facebook.com' },
+      { type: 'LINE', name: '@auralune', url: 'https://line.me' },
+      { type: 'Instagram', name: '@auralune.tarot', url: 'https://instagram.com' },
+      { type: 'Facebook', name: 'Auralune ดูดวงไพ่ทาโรต์', url: 'https://facebook.com' },
     ],
     status_options: ['รอตรวจสลิป', 'รอตรวจคิว', 'กำลังดูดวง', 'กำลังดำเนินการ', 'ส่งคำทำนายแล้ว', 'เสร็จแล้ว'],
     enable_express_queue: true,
@@ -53,7 +53,7 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
   categories: [
     {
       id: 'cat-1',
-      name: '🔮 ดูดวงตอบคำถาม (ไพ่ทาโรต์สวนแอปเปิ้ล)',
+      name: '🔮 ดูดวงตอบคำถาม (ไพ่ทาโรต์ Auralune)',
       description: 'เปิดไพ่ตอบตรงประเด็น ชัดเจน พร้อมคำแนะนำและทางออกที่ดีที่สุด',
       sort_order: 1,
       product_type: 'fortune',
@@ -132,14 +132,14 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
     {
       id: 'cat-3',
       name: '🍎 เสริมดวง & วัตถุมงคล (Lucky Charms & Merchandise)',
-      description: 'ของมงคลนำโชคและวอลเปเปอร์เสริมดวงสไตล์สวนแอปเปิ้ล',
+      description: 'ของมงคลนำโชคและวอลเปเปอร์เสริมดวงสไตล์ Auralune',
       sort_order: 3,
       product_type: 'physical',
       packages: [
         {
           id: 'pkg-7',
           category_id: 'cat-3',
-          name: 'วอลเปเปอร์มือถือเสริมดวง สวนแอปเปิ้ล (Digital Wallpaper)',
+          name: 'วอลเปเปอร์มือถือเสริมดวง Auralune (Digital Wallpaper)',
           description: 'จัดวางไพ่มงคลและเลขศาสตร์ตามดวงวันเกิด ภาพประกอบคอตเทจคอร์สุดคิ้วท์',
           price: 59,
           badge: 'Digital 📱',
