@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import Image from 'next/image';
 import { Order } from '@/types';
 import { X, ArrowLeft, UploadCloud, Loader2, Image as ImageIcon } from 'lucide-react';
+import { compressImageToDataUrl } from '@/lib/image-client';
 
 interface SlipUploadModalProps {
   isOpen: boolean;
@@ -72,7 +73,18 @@ export default function SlipUploadModal({
         formData.append('tracking_token', order.tracking_token);
       }
       if (file) {
-        formData.append('file', file);
+        // Compress slip image to ~50-80KB to ensure fast upload and permanent compact storage
+        try {
+          const compressedDataUrl = await compressImageToDataUrl(file, 1200, 1600, 0.82);
+          const resBlob = await fetch(compressedDataUrl).then((r) => r.blob());
+          const compressedFile = new File([resBlob], file.name.replace(/\.[^/.]+$/, '') + '.jpg', {
+            type: 'image/jpeg',
+          });
+          formData.append('file', compressedFile);
+        } catch {
+          // Fallback to original file if client compression fails
+          formData.append('file', file);
+        }
       }
 
       const res = await fetch('/api/orders/slip', {

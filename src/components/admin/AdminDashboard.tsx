@@ -887,7 +887,8 @@ export default function AdminDashboard({
                               <div className="flex items-center gap-2">
                                 <div
                                   onClick={() => setPreviewSlipUrl(o.slip_url || null)}
-                                  className="w-16 h-16 rounded-lg overflow-hidden border border-[#C9DDB8] cursor-pointer hover:opacity-80 transition relative"
+                                  className="w-16 h-16 rounded-lg overflow-hidden border border-[#C9DDB8] cursor-pointer hover:opacity-80 transition relative bg-[#FFF8EC] flex items-center justify-center shrink-0 shadow-xs"
+                                  title="คลิกเพื่อดูสลิปเต็ม"
                                 >
                                   <Image
                                     src={o.slip_url}
@@ -895,6 +896,11 @@ export default function AdminDashboard({
                                     width={64}
                                     height={64}
                                     unoptimized
+                                    onError={(e) => {
+                                      // If an old slip file from a previous ephemeral container is unavailable
+                                      const target = e.currentTarget as HTMLElement;
+                                      target.style.opacity = '0.3';
+                                    }}
                                     className="w-full h-full object-cover"
                                   />
                                 </div>

@@ -181,7 +181,11 @@ export async function POST(req: Request) {
       }
       const filePath = path.join(SLIP_STORAGE_DIR, safeFilename);
       fs.writeFileSync(filePath, fileBuffer);
-      slipUrl = `/api/orders/slip/${safeFilename}`;
+
+      // Store Base64 Data URL directly into order.slip_url so slips are permanently
+      // preserved and never lost even when Render free tier restarts or redeploys!
+      const base64Data = fileBuffer.toString('base64');
+      slipUrl = `data:${detectedFormat.mime};base64,${base64Data}`;
     }
 
     const updatedOrder = await uploadSlip(orderNo, slipUrl, safeFilename);
