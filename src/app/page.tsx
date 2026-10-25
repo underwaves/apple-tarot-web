@@ -16,6 +16,7 @@ import OrderDoneModal from '@/components/modals/OrderDoneModal';
 import QueueModal from '@/components/modals/QueueModal';
 import ContactModal from '@/components/modals/ContactModal';
 import ReviewsModal from '@/components/modals/ReviewsModal';
+import ConfirmModal from '@/components/modals/ConfirmModal';
 import AdminDashboard from '@/components/admin/AdminDashboard';
 
 import { Category, PackageItem, StoreSettings, MusicTrack, Review, Order, OrderType } from '@/types';
@@ -122,6 +123,9 @@ export default function HomePage() {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('preview') === 'admin';
   });
+
+  // In-web alert modal for general errors
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Fetch store data callback (e.g. after backoffice updates)
   const fetchStoreData = useCallback(async () => {
@@ -253,7 +257,7 @@ export default function HomePage() {
       setIsPaymentOpen(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการสร้างออเดอร์';
-      alert(msg);
+      setErrorMessage(msg);
     } finally {
       setIsCreatingOrder(false);
     }
@@ -414,6 +418,18 @@ export default function HomePage() {
         onOpenQueue={() => setIsQueueOpen(true)}
         onOpenReviews={() => setIsReviewsOpen(true)}
         onOpenContact={() => setIsContactOpen(true)}
+      />
+
+      {/* In-Web Alert / Error Modal */}
+      <ConfirmModal
+        isOpen={Boolean(errorMessage)}
+        title="แจ้งเตือน"
+        message={errorMessage || ''}
+        confirmText="ตกลง"
+        cancelText="ปิด"
+        variant="warning"
+        onConfirm={() => setErrorMessage(null)}
+        onClose={() => setErrorMessage(null)}
       />
     </main>
   );

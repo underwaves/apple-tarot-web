@@ -31,6 +31,7 @@ import {
   Camera,
   ImageIcon,
 } from 'lucide-react';
+import ConfirmModal from '@/components/modals/ConfirmModal';
 
 interface AdminDashboardProps {
   isOpen: boolean;
@@ -68,6 +69,22 @@ export default function AdminDashboard({
 
   // Slip preview modal
   const [previewSlipUrl, setPreviewSlipUrl] = useState<string | null>(null);
+
+  // Custom Confirmation Dialog state (replaces native browser confirm)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title?: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: 'danger' | 'warning' | 'primary';
+    icon?: React.ReactNode;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    message: '',
+    onConfirm: () => {},
+  });
 
   // Music playback test
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
@@ -247,11 +264,11 @@ export default function AdminDashboard({
 
   const handleSaveSettingsPassword = async () => {
     if (settingsNewPassword.trim().length < 4) {
-      alert('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
+      showFeedback('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร', true);
       return;
     }
     if (settingsNewPassword !== settingsConfirmPassword) {
-      alert('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน');
+      showFeedback('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน', true);
       return;
     }
     setIsSavingPassword(true);
@@ -271,7 +288,7 @@ export default function AdminDashboard({
       setSettingsConfirmPassword('');
       showFeedback('เปลี่ยนรหัสผ่านหลังบ้านสำเร็จเรียบร้อยแล้ว 🔐');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน');
+      showFeedback(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน', true);
     } finally {
       setIsSavingPassword(false);
     }
@@ -410,18 +427,30 @@ export default function AdminDashboard({
   };
 
   // Delete queue
-  const handleDeleteQueue = async (queueId: string) => {
-    if (!confirm('ต้องการลบคิวนี้ใช่หรือไม่?')) return;
-    try {
-      const res = await fetch(`/api/queues?id=${queueId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        showFeedback('ลบคิวเรียบร้อย');
-        loadAllData();
-      }
-    } catch {
-      showFeedback('ลบคิวไม่สำเร็จ', true);
-    }
+  const handleDeleteQueue = (queueId: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'ต้องการลบคิวนี้ใช่หรือไม่?',
+      message: 'เมื่อกดยืนยัน ข้อมูลคิวนี้จะถูกลบออกจากระบบทันทีค่ะ',
+      confirmText: 'ลบคิว',
+      cancelText: 'ยกเลิก',
+      variant: 'danger',
+      icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/queues?id=${queueId}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            showFeedback('ลบคิวเรียบร้อยแล้วค่ะ');
+            loadAllData();
+          } else {
+            showFeedback('ลบคิวไม่สำเร็จ', true);
+          }
+        } catch {
+          showFeedback('ลบคิวไม่สำเร็จ', true);
+        }
+      },
+    });
   };
 
   // Save Categories & Packages
@@ -1077,9 +1106,19 @@ export default function AdminDashboard({
                           />
                           <button
                             onClick={() => {
-                              if (confirm('ต้องการลบหมวดหมู่นี้หรือไม่?')) {
-                                setCategories(categories.filter((_, i) => i !== catIdx));
-                              }
+                              setConfirmDialog({
+                                isOpen: true,
+                                title: 'ยืนยันการลบหมวดหมู่',
+                                message: `ต้องการลบหมวดหมู่ "${cat.name || 'ไม่มีชื่อ'}" ใช่หรือไม่?\nรายการสินค้าในหมวดนี้ทั้งหมดจะถูกลบออกด้วยค่ะ`,
+                                confirmText: 'ลบหมวดหมู่',
+                                cancelText: 'ยกเลิก',
+                                variant: 'danger',
+                                icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+                                onConfirm: () => {
+                                  setCategories(categories.filter((_, i) => i !== catIdx));
+                                  showFeedback('ลบหมวดหมู่แล้ว (อย่าลืมกดปุ่ม "บันทึกหมวดหมู่และสินค้า" นะคะ)');
+                                },
+                              });
                             }}
                             className="text-[#D06D80] p-1.5 hover:bg-[#FCE4EC] rounded cursor-pointer"
                             title="ลบหมวดหมู่"
@@ -1136,9 +1175,21 @@ export default function AdminDashboard({
                                 </div>
                                 <button
                                   onClick={() => {
-                                    const next = [...categories];
-                                    next[catIdx].packages.splice(pkgIdx, 1);
-                                    setCategories(next);
+                                    setConfirmDialog({
+                                      isOpen: true,
+                                      title: 'ยืนยันการลบสินค้า',
+                                      message: `ต้องการลบ "${pkg.name || 'สินค้านี้'}" ใช่หรือไม่?`,
+                                      confirmText: 'ลบสินค้า',
+                                      cancelText: 'ยกเลิก',
+                                      variant: 'danger',
+                                      icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+                                      onConfirm: () => {
+                                        const next = [...categories];
+                                        next[catIdx].packages.splice(pkgIdx, 1);
+                                        setCategories(next);
+                                        showFeedback('ลบสินค้าแล้ว (อย่าลืมกดปุ่ม "บันทึกหมวดหมู่และสินค้า" นะคะ)');
+                                      },
+                                    });
                                   }}
                                   className="text-[#D06D80] p-1 mt-4 hover:bg-[#FCE4EC] rounded cursor-pointer"
                                   title="ลบสินค้านี้"
@@ -1598,7 +1649,19 @@ export default function AdminDashboard({
                             )}
                             <button
                               onClick={() => {
-                                setMusicTracks(musicTracks.filter((_, i) => i !== idx));
+                                setConfirmDialog({
+                                  isOpen: true,
+                                  title: 'ยืนยันการลบเพลง',
+                                  message: `ต้องการลบเพลง "${tr.title || 'ไม่มีชื่อ'}" ออกจากรายการเพลงหรือไม่?`,
+                                  confirmText: 'ลบเพลง',
+                                  cancelText: 'ยกเลิก',
+                                  variant: 'danger',
+                                  icon: <Music className="w-6 h-6 text-[#D06D80]" />,
+                                  onConfirm: () => {
+                                    setMusicTracks(musicTracks.filter((_, i) => i !== idx));
+                                    showFeedback('ลบเพลงแล้ว (อย่าลืมกดปุ่ม "บันทึกเพลง" นะคะ)');
+                                  },
+                                });
                               }}
                               className="text-[#D06D80] p-1.5 hover:bg-[#FCE4EC] rounded cursor-pointer"
                               title="ลบเพลง"
@@ -1695,6 +1758,19 @@ export default function AdminDashboard({
           </div>
         </div>
       )}
+
+      {/* In-Web Custom Confirm Modal (replaces browser confirm dialog) */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        variant={confirmDialog.variant}
+        icon={confirmDialog.icon}
+        onConfirm={confirmDialog.onConfirm}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }
