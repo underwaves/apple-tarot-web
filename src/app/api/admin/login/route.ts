@@ -11,8 +11,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { password } = body;
 
-    const configuredPassword = process.env.ADMIN_PASSWORD || 'apple2026';
-
     if (!password || !verifyAdminPassword(password.trim())) {
       return NextResponse.json(
         { success: false, error: 'รหัสผ่านหลังบ้านไม่ถูกต้อง' },

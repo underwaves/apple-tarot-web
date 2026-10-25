@@ -24,6 +24,8 @@ export interface LocalDatabase {
   queues: QueueItem[];
   music_tracks: MusicTrack[];
   reviews: Review[];
+  admin_password_hash?: string;
+  admin_password_salt?: string;
 }
 
 export const DEFAULT_STORE_DATA: LocalDatabase = {
@@ -198,6 +200,8 @@ export function readLocalDb(): LocalDatabase {
       queues: parsed.queues || [],
       music_tracks: parsed.music_tracks || DEFAULT_STORE_DATA.music_tracks,
       reviews: parsed.reviews || DEFAULT_STORE_DATA.reviews,
+      admin_password_hash: parsed.admin_password_hash,
+      admin_password_salt: parsed.admin_password_salt,
     };
   } catch (err) {
     throw new Error(`Failed to parse local database file: ${err instanceof Error ? err.message : String(err)}`);

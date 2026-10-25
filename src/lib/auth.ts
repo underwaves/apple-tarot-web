@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
+import { readLocalDb, writeLocalDb } from '@/lib/db';
 
 export const ADMIN_COOKIE_NAME = 'apple_admin_session';
 const SESSION_MAX_AGE_SECONDS = 86400 * 7; // 7 days
@@ -128,12 +129,66 @@ export async function verifyAdminSession(req?: Request): Promise<boolean> {
   return false;
 }
 
+export function hashCustomPassword(password: string): { hash: string; salt: string } {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+  return { hash, salt };
+}
+
+export function verifyCustomHash(password: string, hash: string, salt: string): boolean {
+  try {
+    const computed = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+    const compBuf = Buffer.from(computed);
+    const hashBuf = Buffer.from(hash);
+    if (compBuf.length !== hashBuf.length) return false;
+    return crypto.timingSafeEqual(compBuf, hashBuf);
+  } catch {
+    return false;
+  }
+}
+
+export function hasCustomAdminPassword(): boolean {
+  try {
+    const db = readLocalDb();
+    return Boolean(db.admin_password_hash && db.admin_password_salt);
+  } catch {
+    return false;
+  }
+}
+
+export function setAdminPassword(newPassword: string): boolean {
+  try {
+    const { hash, salt } = hashCustomPassword(newPassword);
+    const db = readLocalDb();
+    db.admin_password_hash = hash;
+    db.admin_password_salt = salt;
+    writeLocalDb(db);
+    return true;
+  } catch (err) {
+    console.error('Failed to set custom admin password:', err);
+    return false;
+  }
+}
+
 export function verifyAdminPassword(inputPassword: string): boolean {
-  const adminPassword = process.env.ADMIN_PASSWORD || 'apple2026';
   if (!inputPassword || typeof inputPassword !== 'string') {
     return false;
   }
 
+  // 1. Check custom password saved in database by client
+  try {
+    const db = readLocalDb();
+    if (db.admin_password_hash && db.admin_password_salt) {
+      if (verifyCustomHash(inputPassword, db.admin_password_hash, db.admin_password_salt)) {
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read custom admin password:', e);
+  }
+
+  // 2. Fallback to environment variable or initial default 'apple2026'
+  const adminPassword = process.env.ADMIN_PASSWORD || 'apple2026';
   const inputBuffer = Buffer.from(inputPassword, 'utf-8');
   const actualBuffer = Buffer.from(adminPassword, 'utf-8');
 
