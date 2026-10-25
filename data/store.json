@@ -180,9 +180,11 @@
       "total_amount": 32,
       "is_express": true,
       "express_fee": 17,
-      "status": "pending_slip",
+      "status": "pending_verification",
       "created_at": "2026-10-25T09:43:35.935Z",
-      "updated_at": "2026-10-25T09:43:35.935Z"
+      "updated_at": "2026-10-25T09:44:36.406Z",
+      "slip_url": "/api/orders/slip/slip_9cac5181-59ad-4d77-a816-fd9a91477b31.jpg",
+      "slip_filename": "slip_9cac5181-59ad-4d77-a816-fd9a91477b31.jpg"
     },
     {
       "id": "ord-1792919562989-m0v5h",
