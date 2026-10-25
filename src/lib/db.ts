@@ -333,7 +333,9 @@ export async function getStoreData() {
 
     const settingsMap: Record<string, unknown> = {};
     settingsRes.data?.forEach((row: { key: string; value: unknown }) => {
-      settingsMap[row.key] = row.value;
+      if (row.key !== 'admin_auth') {
+        settingsMap[row.key] = row.value;
+      }
     });
 
     const categories: Category[] = (catsRes.data || []).map((cat: {

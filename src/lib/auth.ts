@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { readLocalDb, writeLocalDb } from '@/lib/db';
 import { isNeonConfigured, neonGet, neonSet } from '@/lib/neon';
+import { isSupabaseConfigured, supabaseAdmin } from '@/lib/supabase';
 
 export const ADMIN_COOKIE_NAME = 'apple_admin_session';
 const SESSION_MAX_AGE_SECONDS = 86400 * 7; // 7 days
@@ -149,6 +150,23 @@ export function verifyCustomHash(password: string, hash: string, salt: string): 
 }
 
 export async function hasCustomAdminPassword(): Promise<boolean> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    try {
+      const { data } = await supabaseAdmin
+        .from('store_settings')
+        .select('value')
+        .eq('key', 'admin_auth')
+        .maybeSingle();
+      if (data && data.value) {
+        const val = data.value as { hash?: string; salt?: string };
+        return Boolean(val.hash && val.salt);
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   if (isNeonConfigured) {
     try {
       const authData = await neonGet<{ hash?: string; salt?: string } | null>('admin_auth', null);
@@ -170,9 +188,26 @@ export async function hasCustomAdminPassword(): Promise<boolean> {
 export async function setAdminPassword(newPassword: string): Promise<boolean> {
   try {
     const { hash, salt } = hashCustomPassword(newPassword);
+
+    if (isSupabaseConfigured && supabaseAdmin) {
+      const { error } = await supabaseAdmin
+        .from('store_settings')
+        .upsert({
+          key: 'admin_auth',
+          value: { hash, salt },
+          updated_at: new Date().toISOString(),
+        });
+      if (error) {
+        console.error('Failed to save custom password to Supabase:', error);
+        return false;
+      }
+      return true;
+    }
+
     if (isNeonConfigured) {
       await neonSet('admin_auth', { hash, salt });
     }
+
     const db = readLocalDb();
     db.admin_password_hash = hash;
     db.admin_password_salt = salt;
@@ -189,33 +224,57 @@ export async function verifyAdminPassword(inputPassword: string): Promise<boolea
     return false;
   }
 
-  // 1. Check Neon PostgreSQL
+  // 1. Check Supabase custom password
+  if (isSupabaseConfigured && supabaseAdmin) {
+    try {
+      const { data } = await supabaseAdmin
+        .from('store_settings')
+        .select('value')
+        .eq('key', 'admin_auth')
+        .maybeSingle();
+      if (data && data.value) {
+        const auth = data.value as { hash?: string; salt?: string };
+        if (auth.hash && auth.salt) {
+          return verifyCustomHash(inputPassword, auth.hash, auth.salt);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read custom admin password from Supabase:', e);
+    }
+
+    // If Supabase is active and has no custom password set, fall back to environment password
+    const adminPassword = process.env.ADMIN_PASSWORD || 'apple2026';
+    const inputBuffer = Buffer.from(inputPassword, 'utf-8');
+    const actualBuffer = Buffer.from(adminPassword, 'utf-8');
+    if (inputBuffer.length !== actualBuffer.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(inputBuffer, actualBuffer);
+  }
+
+  // 2. Check Neon PostgreSQL custom password
   if (isNeonConfigured) {
     try {
       const authData = await neonGet<{ hash?: string; salt?: string } | null>('admin_auth', null);
       if (authData && authData.hash && authData.salt) {
-        if (verifyCustomHash(inputPassword, authData.hash, authData.salt)) {
-          return true;
-        }
+        return verifyCustomHash(inputPassword, authData.hash, authData.salt);
       }
     } catch (e) {
       console.warn('Could not read custom admin password from Neon:', e);
     }
   }
 
-  // 2. Check custom password saved in local DB
+  // 3. Check custom password saved in local DB
   try {
     const db = readLocalDb();
     if (db.admin_password_hash && db.admin_password_salt) {
-      if (verifyCustomHash(inputPassword, db.admin_password_hash, db.admin_password_salt)) {
-        return true;
-      }
+      return verifyCustomHash(inputPassword, db.admin_password_hash, db.admin_password_salt);
     }
   } catch (e) {
     console.warn('Could not read custom admin password from local:', e);
   }
 
-  // 3. Fallback to environment variable or initial default 'apple2026'
+  // 4. Fallback to environment variable or initial default 'apple2026' ONLY IF no custom password is set
   const adminPassword = process.env.ADMIN_PASSWORD || 'apple2026';
   const inputBuffer = Buffer.from(inputPassword, 'utf-8');
   const actualBuffer = Buffer.from(adminPassword, 'utf-8');
