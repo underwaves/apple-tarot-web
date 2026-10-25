@@ -102,12 +102,15 @@ export default function MusicPlayer({ tracks }: MusicPlayerProps) {
     try {
       if (!ytPlayerRef.current) {
         ytPlayerRef.current = new window.YT.Player('yt-bg-player', {
-          height: '10',
-          width: '10',
+          height: '200',
+          width: '200',
           videoId: ytId,
           playerVars: {
             autoplay: isPlaying ? 1 : 0,
             controls: 0,
+            playsinline: 1,
+            enablejsapi: 1,
+            origin: typeof window !== 'undefined' ? window.location.origin : '',
             loop: isLooping ? 1 : 0,
             playlist: ytId,
           },
@@ -221,8 +224,8 @@ export default function MusicPlayer({ tracks }: MusicPlayerProps) {
 
   return (
     <>
-      {/* Hidden YouTube Audio IFrame Container */}
-      <div className="fixed -bottom-96 -right-96 w-1 h-1 pointer-events-none opacity-0 overflow-hidden">
+      {/* YouTube Audio IFrame Container (Proper dimensions to ensure YouTube API plays smoothly) */}
+      <div className="fixed -bottom-[9999px] -right-[9999px] w-[200px] h-[200px] pointer-events-none opacity-0 overflow-hidden">
         <div id="yt-bg-player" />
       </div>
 

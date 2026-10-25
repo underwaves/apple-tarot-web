@@ -9,7 +9,7 @@ import {
   StoreSettings,
   MusicTrack,
 } from '@/types';
-import { formatBaht, formatThaiDate } from '@/lib/utils';
+import { formatBaht, formatThaiDate, extractYouTubeId } from '@/lib/utils';
 import {
   X,
   LayoutDashboard,
@@ -76,6 +76,9 @@ export default function AdminDashboard({
 
   // Slip preview modal
   const [previewSlipUrl, setPreviewSlipUrl] = useState<string | null>(null);
+
+  // YouTube test preview modal
+  const [testingYtId, setTestingYtId] = useState<string | null>(null);
 
   // Custom Confirmation Dialog state (replaces native browser confirm)
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -573,6 +576,16 @@ export default function AdminDashboard({
   };
 
   const toggleTestAudio = (url: string, id: string) => {
+    const ytId = extractYouTubeId(url);
+    if (ytId) {
+      // Pause any ongoing HTML5 audio test
+      testAudioRef.current?.pause();
+      setPlayingTrackId(null);
+      // Open YouTube preview modal directly
+      setTestingYtId(ytId);
+      return;
+    }
+
     if (playingTrackId === id) {
       testAudioRef.current?.pause();
       setPlayingTrackId(null);
@@ -585,7 +598,7 @@ export default function AdminDashboard({
         .play()
         .then(() => setPlayingTrackId(id))
         .catch(() => {
-          showFeedback('ลิงก์นี้ไม่สามารถเล่นเป็นไฟล์เสียงตรงได้ (หากเป็น YouTube แนะนำให้อัปโหลดไฟล์ MP3)', true);
+          showFeedback('ไม่สามารถเล่นไฟล์เสียงตรงนี้ได้ แนะนำให้ตรวจสอบลิงก์หรืออัปโหลดไฟล์ MP3 ค่ะ', true);
           setPlayingTrackId(null);
         });
       testAudioRef.current.onended = () => setPlayingTrackId(null);
@@ -1701,7 +1714,13 @@ export default function AdminDashboard({
                                     ? 'bg-[#F6B8C6] text-[#543E30]'
                                     : 'bg-[#FFF8EC] text-[#947765] hover:text-[#543E30]'
                                 }`}
-                                title={playingTrackId === tr.id ? 'หยุดทดสอบเสียง' : 'ทดสอบฟัง'}
+                                title={
+                                  extractYouTubeId(tr.url)
+                                    ? 'ทดสอบฟังเพลงจาก YouTube'
+                                    : playingTrackId === tr.id
+                                    ? 'หยุดทดสอบเสียง'
+                                    : 'ทดสอบฟัง'
+                                }
                               >
                                 {playingTrackId === tr.id ? (
                                   <Pause className="w-3.5 h-3.5" />
@@ -1748,9 +1767,9 @@ export default function AdminDashboard({
                           />
 
                           {/* YouTube notice */}
-                          {tr.url && (tr.url.includes('youtu.be') || tr.url.includes('youtube.com')) && (
-                            <p className="mt-1 text-[11px] text-[#A8B99A] leading-tight flex items-center gap-1 font-medium">
-                              <span>✨ ตรวจพบลิงก์ YouTube: ระบบเปิดเล่นเพลงเป็นเสียงพื้นหลังให้อัตโนมัติแล้วค่ะ</span>
+                          {tr.url && extractYouTubeId(tr.url) && (
+                            <p className="mt-1 text-[11px] text-[#2E7D32] leading-tight flex items-center gap-1 font-medium bg-[#E8F5E9] px-2.5 py-1.5 rounded-lg border border-[#C9DDB8]">
+                              <span>✨ ลิงก์ YouTube พร้อมใช้งาน: กดปุ่มเล่น ▷ ด้านบนเพื่อทดสอบฟังได้เลยค่ะ (เมื่อบันทึกจะเล่นบนหน้าเว็บหลัก)</span>
                             </p>
                           )}
                         </div>
@@ -1818,6 +1837,47 @@ export default function AdminDashboard({
               unoptimized
               className="w-full h-auto max-h-[85vh] object-contain"
             />
+          </div>
+        </div>
+      )}
+
+      {/* YouTube Music Preview Modal */}
+      {testingYtId && (
+        <div
+          onClick={() => setTestingYtId(null)}
+          className="fixed inset-0 z-60 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#FFF8EC] border-2 border-[#F6B8C6] w-full max-w-md rounded-3xl p-5 shadow-2xl text-[#543E30] animate-in zoom-in-95 duration-200 relative"
+          >
+            <button
+              onClick={() => setTestingYtId(null)}
+              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-[#FCE4EC] flex items-center justify-center text-[#543E30] hover:bg-[#F6B8C6] transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">🎵</span>
+              <h4 className="font-serif font-bold text-[#D06D80] text-base">
+                ทดสอบฟังเพลงจาก YouTube
+              </h4>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden aspect-video border border-[#F6B8C6]/60 shadow-md bg-black">
+              <iframe
+                src={`https://www.youtube.com/embed/${testingYtId}?autoplay=1&enablejsapi=1`}
+                title="YouTube music test"
+                allow="autoplay; encrypted-media; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full"
+              />
+            </div>
+
+            <p className="text-xs text-[#947765] mt-3 leading-relaxed">
+              ✨ เพลงนี้เชื่อมต่อกับ YouTube เรียบร้อยแล้วค่ะ! เมื่อกดปุ่ม &quot;บันทึกเพลง&quot; ด้านล่าง เพลงนี้จะเล่นเป็นเสียงพื้นหลังบนหน้าเว็บหลักให้ลูกค้าฟังได้ทันทีค่ะ 🍎
+            </p>
           </div>
         </div>
       )}
