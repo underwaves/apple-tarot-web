@@ -10,9 +10,10 @@ import {
 } from '@/lib/auth';
 
 export async function GET() {
+  const hasCustom = await hasCustomAdminPassword();
   return NextResponse.json({
     success: true,
-    has_custom_password: hasCustomAdminPassword(),
+    has_custom_password: hasCustom,
   });
 }
 
@@ -30,13 +31,13 @@ export async function POST(req: Request) {
 
     const cleanNewPass = new_password.trim();
     const isSessionValid = await verifyAdminSession(req);
-    const hasCustom = hasCustomAdminPassword();
+    const hasCustom = await hasCustomAdminPassword();
 
     // If not authenticated via session, verify permission to set/change
     if (!isSessionValid) {
       if (hasCustom) {
         // If already set, must provide current password or master pin
-        if (!current_password || !verifyAdminPassword(current_password.trim())) {
+        if (!current_password || !(await verifyAdminPassword(current_password.trim()))) {
           return NextResponse.json(
             { success: false, error: 'รหัสผ่านเดิมไม่ถูกต้อง' },
             { status: 401 }
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
         }
       } else {
         // First-time setup: if current_password was supplied, verify it if they provided one
-        if (current_password && !verifyAdminPassword(current_password.trim())) {
+        if (current_password && !(await verifyAdminPassword(current_password.trim()))) {
           return NextResponse.json(
             { success: false, error: 'รหัสผ่านเริ่มต้นไม่ถูกต้อง' },
             { status: 401 }
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
     }
 
     // Save the new password to database
-    const saved = setAdminPassword(cleanNewPass);
+    const saved = await setAdminPassword(cleanNewPass);
     if (!saved) {
       return NextResponse.json(
         { success: false, error: 'ไม่สามารถบันทึกรหัสผ่านใหม่ได้' },

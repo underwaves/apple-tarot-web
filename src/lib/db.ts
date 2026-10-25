@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { supabaseAdmin, isSupabaseConfigured } from './supabase';
+import { isNeonConfigured, neonGet, neonSet } from './neon';
 import {
   Category,
   Order,
@@ -233,6 +234,25 @@ export function writeLocalDb(data: LocalDatabase): void {
 // -------------------------------------------------------------
 
 export async function getStoreData() {
+  if (isNeonConfigured) {
+    try {
+      const [settings, categories, music_tracks, reviews] = await Promise.all([
+        neonGet<StoreSettings>('settings', DEFAULT_STORE_DATA.settings),
+        neonGet<Category[]>('categories', DEFAULT_STORE_DATA.categories),
+        neonGet<MusicTrack[]>('music_tracks', DEFAULT_STORE_DATA.music_tracks),
+        neonGet<Review[]>('reviews', DEFAULT_STORE_DATA.reviews),
+      ]);
+      return {
+        settings: settings || DEFAULT_STORE_DATA.settings,
+        categories: categories && categories.length > 0 ? categories : DEFAULT_STORE_DATA.categories,
+        music_tracks: music_tracks && music_tracks.length > 0 ? music_tracks : DEFAULT_STORE_DATA.music_tracks,
+        reviews: reviews && reviews.length > 0 ? reviews : DEFAULT_STORE_DATA.reviews,
+      };
+    } catch (err) {
+      console.warn('Neon read getStoreData error, falling back:', err);
+    }
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     const [settingsRes, catsRes, pkgsRes, musicRes, reviewsRes] = await Promise.all([
       supabaseAdmin.from('store_settings').select('*'),
@@ -332,7 +352,25 @@ export async function createOrder(data: {
   let allPackages: PackageItem[] = [];
   let expressFeeSetting = 32;
 
-  if (isSupabaseConfigured && supabaseAdmin) {
+  if (isNeonConfigured) {
+    try {
+      const [neonCats, neonSettings] = await Promise.all([
+        neonGet<Category[]>('categories', DEFAULT_STORE_DATA.categories),
+        neonGet<StoreSettings>('settings', DEFAULT_STORE_DATA.settings),
+      ]);
+      allPackages = (neonCats || []).flatMap((c) => c.packages);
+      if (neonSettings?.express_queue_fee !== undefined) {
+        expressFeeSetting = Number(neonSettings.express_queue_fee);
+      }
+    } catch (e) {
+      console.warn('Neon package read failed in createOrder, fallback:', e);
+      const local = readLocalDb();
+      allPackages = local.categories.flatMap((c) => c.packages);
+      if (local.settings.express_queue_fee !== undefined) {
+        expressFeeSetting = Number(local.settings.express_queue_fee);
+      }
+    }
+  } else if (isSupabaseConfigured && supabaseAdmin) {
     const { data: pkgs, error } = await supabaseAdmin
       .from('packages')
       .select('*')
@@ -474,6 +512,22 @@ export async function createOrder(data: {
     updated_at: now,
   };
 
+  if (isNeonConfigured) {
+    try {
+      const orders = await neonGet<Order[]>('orders', []);
+      orders.unshift(newOrder);
+      await neonSet('orders', orders);
+    } catch (err) {
+      console.error('Failed to save order to Neon:', err);
+    }
+    try {
+      const local = readLocalDb();
+      local.orders.unshift(newOrder);
+      writeLocalDb(local);
+    } catch {}
+    return newOrder;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data: inserted, error } = await supabaseAdmin
       .from('orders')
@@ -524,6 +578,33 @@ export async function createOrder(data: {
 export async function uploadSlip(orderNo: string, slipUrl: string, filename?: string): Promise<Order> {
   const now = new Date().toISOString();
 
+  if (isNeonConfigured) {
+    const orders = await neonGet<Order[]>('orders', []);
+    const order = orders.find((o) => o.order_no === orderNo || o.id === orderNo);
+    if (!order) {
+      throw new Error('ไม่พบข้อมูลคำสั่งซื้อ');
+    }
+    order.slip_url = slipUrl;
+    order.slip_filename = filename;
+    order.status = 'pending_verification';
+    order.updated_at = now;
+    await neonSet('orders', orders);
+
+    try {
+      const local = readLocalDb();
+      const locOrder = local.orders.find((o) => o.order_no === orderNo || o.id === orderNo);
+      if (locOrder) {
+        locOrder.slip_url = slipUrl;
+        locOrder.slip_filename = filename;
+        locOrder.status = 'pending_verification';
+        locOrder.updated_at = now;
+        writeLocalDb(local);
+      }
+    } catch {}
+
+    return order;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data: existing, error: findErr } = await supabaseAdmin
       .from('orders')
@@ -570,6 +651,16 @@ export async function uploadSlip(orderNo: string, slipUrl: string, filename?: st
 }
 
 export async function getOrder(orderNoOrId: string, trackingToken?: string): Promise<Order | null> {
+  if (isNeonConfigured) {
+    const orders = await neonGet<Order[]>('orders', []);
+    const order = orders.find(
+      (o) =>
+        (o.order_no === orderNoOrId || o.id === orderNoOrId) &&
+        (!trackingToken || o.tracking_token === trackingToken)
+    );
+    if (order) return order;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     let query = supabaseAdmin
       .from('orders')
@@ -597,6 +688,11 @@ export async function getOrder(orderNoOrId: string, trackingToken?: string): Pro
 }
 
 export async function getAllOrders(): Promise<Order[]> {
+  if (isNeonConfigured) {
+    const orders = await neonGet<Order[]>('orders', []);
+    return orders;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data, error } = await supabaseAdmin
       .from('orders')
@@ -614,6 +710,11 @@ export async function getAllOrders(): Promise<Order[]> {
 }
 
 export async function getAllQueues(): Promise<QueueItem[]> {
+  if (isNeonConfigured) {
+    const queues = await neonGet<QueueItem[]>('queues', []);
+    return queues.sort((a, b) => a.queue_no - b.queue_no);
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data, error } = await supabaseAdmin
       .from('queues')
@@ -631,6 +732,12 @@ export async function getAllQueues(): Promise<QueueItem[]> {
 }
 
 export async function getQueueByOrder(orderNo: string): Promise<QueueItem | null> {
+  if (isNeonConfigured) {
+    const queues = await neonGet<QueueItem[]>('queues', []);
+    const q = queues.find((item) => item.order_no === orderNo);
+    return q || null;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data, error } = await supabaseAdmin
       .from('queues')
@@ -654,6 +761,77 @@ export async function getQueueByOrder(orderNo: string): Promise<QueueItem | null
  */
 export async function confirmOrderPayment(orderIdOrNo: string) {
   const now = new Date().toISOString();
+
+  if (isNeonConfigured) {
+    const [orders, queues, storeInfo] = await Promise.all([
+      neonGet<Order[]>('orders', []),
+      neonGet<QueueItem[]>('queues', []),
+      getStoreData(),
+    ]);
+
+    const order = orders.find((o) => o.id === orderIdOrNo || o.order_no === orderIdOrNo);
+    if (!order) {
+      throw new Error('ไม่พบคำสั่งซื้อ');
+    }
+
+    order.status = 'confirmed';
+    order.updated_at = now;
+
+    let queueItem = queues.find((q) => q.order_no === order.order_no);
+    if (!queueItem) {
+      const nextQueueNo =
+        (queues.length > 0 ? Math.max(...queues.map((q) => q.queue_no)) : 0) + 1;
+
+      const isExpress = Boolean(order.is_express);
+      const defaultEstimated = isExpress
+        ? (storeInfo.settings.express_estimated_time || '⚡ ภายใน 12-24 ชั่วโมง')
+        : '1-2 วันทำการ';
+      const defaultNote = isExpress
+        ? '⚡ รับออเดอร์คิวด่วนพิเศษ ลัดคิวตามลำดับเร่งด่วนค่ะ'
+        : 'รับออเดอร์เรียบร้อย รอคิวจัดทำตามลำดับค่ะ';
+
+      const itemsSummary = (order.items || []).map((i) => `${i.name} x${i.quantity}`).join(', ');
+
+      queueItem = {
+        id: 'q-' + Date.now(),
+        queue_no: nextQueueNo,
+        order_id: order.id,
+        order_no: order.order_no,
+        customer_name: order.customer_name,
+        items_summary: isExpress ? `⚡ [ลัดคิว] ${itemsSummary}` : itemsSummary,
+        contact_info: `${order.contact_channel}: ${order.contact_value}`,
+        status: 'รอตรวจคิว',
+        is_express: isExpress,
+        estimated_time: defaultEstimated,
+        shop_note: defaultNote,
+        is_manual: false,
+        created_at: now,
+        updated_at: now,
+      };
+
+      queues.push(queueItem);
+      order.queue_id = queueItem.id;
+    }
+
+    await Promise.all([neonSet('orders', orders), neonSet('queues', queues)]);
+
+    // Mirror to local DB
+    try {
+      const local = readLocalDb();
+      const locOrder = local.orders.find((o) => o.id === orderIdOrNo || o.order_no === orderIdOrNo);
+      if (locOrder) {
+        locOrder.status = 'confirmed';
+        locOrder.updated_at = now;
+        locOrder.queue_id = queueItem.id;
+      }
+      if (!local.queues.some((q) => q.order_no === order.order_no)) {
+        local.queues.push(queueItem);
+      }
+      writeLocalDb(local);
+    } catch {}
+
+    return { order, queue: queueItem };
+  }
 
   if (isSupabaseConfigured && supabaseAdmin) {
     // 1. Fetch order
@@ -803,6 +981,36 @@ export async function updateQueueStatus(
 ): Promise<QueueItem> {
   const now = new Date().toISOString();
 
+  if (isNeonConfigured) {
+    const queues = await neonGet<QueueItem[]>('queues', []);
+    const queue = queues.find((q) => q.id === queueId);
+    if (!queue) {
+      throw new Error('ไม่พบคิว');
+    }
+    queue.status = status;
+    if (estimatedTime !== undefined) queue.estimated_time = estimatedTime;
+    if (shopNote !== undefined) queue.shop_note = shopNote;
+    if (isExpress !== undefined) queue.is_express = isExpress;
+    queue.updated_at = now;
+
+    await neonSet('queues', queues);
+
+    try {
+      const local = readLocalDb();
+      const lq = local.queues.find((q) => q.id === queueId);
+      if (lq) {
+        lq.status = status;
+        if (estimatedTime !== undefined) lq.estimated_time = estimatedTime;
+        if (shopNote !== undefined) lq.shop_note = shopNote;
+        if (isExpress !== undefined) lq.is_express = isExpress;
+        lq.updated_at = now;
+        writeLocalDb(local);
+      }
+    } catch {}
+
+    return queue;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     const updatePayload: Record<string, unknown> = {
       status,
@@ -850,6 +1058,39 @@ export async function addManualQueue(data: {
   is_express?: boolean;
 }): Promise<QueueItem> {
   const now = new Date().toISOString();
+
+  if (isNeonConfigured) {
+    const queues = await neonGet<QueueItem[]>('queues', []);
+    const nextQueueNo =
+      (queues.length > 0 ? Math.max(...queues.map((q) => q.queue_no)) : 0) + 1;
+
+    const newQueue: QueueItem = {
+      id: 'q-man-' + Date.now(),
+      queue_no: nextQueueNo,
+      order_no: 'MAN-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+      customer_name: data.customer_name,
+      items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
+      contact_info: data.contact_info || '-',
+      status: 'รอตรวจคิว',
+      is_express: Boolean(data.is_express),
+      estimated_time: data.estimated_time || (data.is_express ? '⚡ ภายใน 12-24 ชั่วโมง' : '1-2 วันทำการ'),
+      shop_note: data.shop_note || (data.is_express ? '⚡ คิวด่วนพิเศษ เพิ่มโดยร้านค้า' : 'คิวเพิ่มด้วยตนเองโดยร้านค้า'),
+      is_manual: true,
+      created_at: now,
+      updated_at: now,
+    };
+
+    queues.push(newQueue);
+    await neonSet('queues', queues);
+
+    try {
+      const local = readLocalDb();
+      local.queues.push(newQueue);
+      writeLocalDb(local);
+    } catch {}
+
+    return newQueue;
+  }
 
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data: allQ } = await supabaseAdmin
@@ -912,6 +1153,20 @@ export async function addManualQueue(data: {
 }
 
 export async function deleteQueue(queueId: string): Promise<boolean> {
+  if (isNeonConfigured) {
+    let queues = await neonGet<QueueItem[]>('queues', []);
+    queues = queues.filter((q) => q.id !== queueId);
+    await neonSet('queues', queues);
+
+    try {
+      const local = readLocalDb();
+      local.queues = local.queues.filter((q) => q.id !== queueId);
+      writeLocalDb(local);
+    } catch {}
+
+    return true;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     const { error } = await supabaseAdmin.from('queues').delete().eq('id', queueId);
     if (error) {
@@ -927,6 +1182,16 @@ export async function deleteQueue(queueId: string): Promise<boolean> {
 }
 
 export async function saveCategories(categories: Category[]): Promise<Category[]> {
+  if (isNeonConfigured) {
+    await neonSet('categories', categories);
+    try {
+      const local = readLocalDb();
+      local.categories = categories;
+      writeLocalDb(local);
+    } catch {}
+    return categories;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     for (const cat of categories) {
       const { error: catErr } = await supabaseAdmin
@@ -973,6 +1238,18 @@ export async function saveCategories(categories: Category[]): Promise<Category[]
 }
 
 export async function saveStoreSettings(settings: StoreSettings): Promise<StoreSettings> {
+  if (isNeonConfigured) {
+    const current = await neonGet<StoreSettings>('settings', DEFAULT_STORE_DATA.settings);
+    const updated = { ...current, ...settings };
+    await neonSet('settings', updated);
+    try {
+      const local = readLocalDb();
+      local.settings = { ...local.settings, ...settings };
+      writeLocalDb(local);
+    } catch {}
+    return updated;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     for (const [key, value] of Object.entries(settings)) {
       const { error } = await supabaseAdmin
@@ -993,6 +1270,16 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
 }
 
 export async function saveMusicTracks(tracks: MusicTrack[]): Promise<MusicTrack[]> {
+  if (isNeonConfigured) {
+    await neonSet('music_tracks', tracks);
+    try {
+      const local = readLocalDb();
+      local.music_tracks = tracks;
+      writeLocalDb(local);
+    } catch {}
+    return tracks;
+  }
+
   if (isSupabaseConfigured && supabaseAdmin) {
     for (const track of tracks) {
       const { error } = await supabaseAdmin
@@ -1020,6 +1307,25 @@ export async function saveMusicTracks(tracks: MusicTrack[]): Promise<MusicTrack[
 
 export async function addReview(review: { customer_name: string; rating: number; comment: string }): Promise<Review> {
   const now = new Date().toISOString();
+
+  if (isNeonConfigured) {
+    const reviews = await neonGet<Review[]>('reviews', DEFAULT_STORE_DATA.reviews);
+    const newRev: Review = {
+      id: 'rev-' + Date.now(),
+      customer_name: review.customer_name,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: now,
+    };
+    reviews.unshift(newRev);
+    await neonSet('reviews', reviews);
+    try {
+      const local = readLocalDb();
+      local.reviews.unshift(newRev);
+      writeLocalDb(local);
+    } catch {}
+    return newRev;
+  }
 
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data, error } = await supabaseAdmin

@@ -15,10 +15,6 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
         value: apple2026
-      # Optional: หากใช้ Supabase ให้กรอกค่านี้ในหน้า Render Dashboard หรือปลดคอมเมนต์
-      # - key: NEXT_PUBLIC_SUPABASE_URL
-      #   sync: false
-      # - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-      #   sync: false
-      # - key: SUPABASE_SERVICE_ROLE_KEY
-      #   sync: false
+      - key: DATABASE_URL
+        sync: false
+        value: postgresql://neondb_owner:npg_mKdtEJSTQ67e@ep-autumn-bird-azteckwb-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require

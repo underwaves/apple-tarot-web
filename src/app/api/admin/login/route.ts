@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { password } = body;
 
-    if (!password || !verifyAdminPassword(password.trim())) {
+    if (!password || !(await verifyAdminPassword(password.trim()))) {
       return NextResponse.json(
         { success: false, error: 'รหัสผ่านหลังบ้านไม่ถูกต้อง' },
         { status: 401 }
