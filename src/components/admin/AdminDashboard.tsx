@@ -69,6 +69,7 @@ export default function AdminDashboard({
   const [settingsNewPassword, setSettingsNewPassword] = useState('');
   const [settingsConfirmPassword, setSettingsConfirmPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isTogglingStore, setIsTogglingStore] = useState(false);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<
@@ -578,7 +579,6 @@ export default function AdminDashboard({
   };
 
   // Toggle Store Open / Close Status
-  const [isTogglingStore, setIsTogglingStore] = useState(false);
   const handleToggleStoreOpen = async (newIsOpen: boolean) => {
     if (!settings) return;
     setIsTogglingStore(true);
