@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { Order, StoreContact, StoreSettings } from '@/types';
 import { formatBillText, formatQueueNo, getEstimatedWaitTime } from '@/lib/utils';
-import { CheckCircle2, Copy, Check, MessageSquare, Clock, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Copy, Check, MessageSquare, Clock, ExternalLink, AlertCircle } from 'lucide-react';
 
 interface OrderDoneModalProps {
   isOpen: boolean;
@@ -36,9 +36,13 @@ export default function OrderDoneModal({
   onOpenQueue,
 }: OrderDoneModalProps) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
+  const billBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
+      setCopied(false);
+      setCopyError('');
       // Trigger festive confetti
       confetti({
         particleCount: 60,
@@ -46,11 +50,12 @@ export default function OrderDoneModal({
         origin: { y: 0.6 },
         colors: ['#e63946', '#95d5b2', '#ffd4bf', '#ffffff'],
       });
-      // Save last tracking credentials to session storage for easy lookup
-      if (order?.order_no && order?.tracking_token) {
+      // Save visible 5-digit order/tracking code to session storage for easy queue lookup
+      if (order?.order_no) {
+        const visibleNo = formatQueueNo(order.order_no);
         try {
-          sessionStorage.setItem('apple_last_order_no', order.order_no);
-          sessionStorage.setItem('apple_last_tracking_token', order.tracking_token);
+          sessionStorage.setItem('apple_last_order_no', visibleNo);
+          sessionStorage.setItem('apple_last_tracking_token', visibleNo);
         } catch {
           // ignore storage error
         }
@@ -64,10 +69,55 @@ export default function OrderDoneModal({
   const formattedOrderNo = formatQueueNo(order.order_no);
   const waitTimeText = getEstimatedWaitTime(order.items || [], order.is_express);
 
-  const copyBill = () => {
-    navigator.clipboard.writeText(billText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
+  const selectBillTextManually = () => {
+    if (typeof window === 'undefined' || !billBoxRef.current) return;
+    try {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(billBoxRef.current);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    } catch {
+      // ignore selection error
+    }
+  };
+
+  const copyBill = async () => {
+    setCopyError('');
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(billText);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+        return;
+      }
+
+      // Fallback when navigator.clipboard.writeText is unavailable
+      if (typeof document !== 'undefined' && typeof document.execCommand === 'function') {
+        const textArea = document.createElement('textarea');
+        textArea.value = billText;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (ok) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 3000);
+          return;
+        }
+      }
+
+      throw new Error('Copy failed');
+    } catch {
+      setCopied(false);
+      setCopyError(
+        'คัดลอกอัตโนมัติไม่สำเร็จ กรุณากดค้างหรือลากคลุมข้อความบิลในกรอบด้านบนเพื่อคัดลอกด้วยตนเองค่ะ'
+      );
+      selectBillTextManually();
+    }
   };
 
   // Match the exact contact channel chosen by the customer
@@ -128,7 +178,7 @@ export default function OrderDoneModal({
           <p className="text-xs sm:text-sm font-bold text-[#543E30]">
             🔑 รหัสติดตามสถานะ (ห้ามแชร์):{' '}
             <span className="font-mono text-[#D06D80] bg-[#FFF8EC] px-1.5 py-0.5 rounded border border-[#F6D1B5]">
-              {order.tracking_token || '-'}
+              {formattedOrderNo}
             </span>
           </p>
           <p className="text-xs sm:text-sm font-bold text-[#543E30]">
@@ -140,8 +190,13 @@ export default function OrderDoneModal({
           </div>
         </div>
 
-        {/* Full Bill Text Preview Box */}
-        <div className="bg-[#FFFEFA] p-3 rounded-2xl border border-[#C9DDB8] text-left font-mono text-[11px] text-[#543E30] max-h-28 overflow-y-auto whitespace-pre-wrap select-text mb-3 shadow-2xs">
+        {/* Full Bill Text Preview Box (Selectable for manual copy) */}
+        <div
+          ref={billBoxRef}
+          onClick={selectBillTextManually}
+          title="แตะเพื่อเลือกข้อความบิลทั้งหมด"
+          className="bg-[#FFFEFA] p-3 rounded-2xl border border-[#C9DDB8] text-left font-mono text-[11px] text-[#543E30] max-h-28 overflow-y-auto whitespace-pre-wrap select-all cursor-text mb-3 shadow-2xs"
+        >
           {billText}
         </div>
 
@@ -164,7 +219,7 @@ export default function OrderDoneModal({
               {copied ? (
                 <>
                   <Check className="w-5 h-5" />
-                  <span>คัดลอกข้อความบิลเรียบร้อยแล้ว ✓</span>
+                  <span>คัดลอกสำเร็จ ✓</span>
                 </>
               ) : (
                 <>
@@ -173,6 +228,15 @@ export default function OrderDoneModal({
                 </>
               )}
             </button>
+            {copyError && (
+              <div
+                role="alert"
+                className="p-2.5 rounded-xl bg-[#FFFEFA] border-2 border-[#D06D80] text-xs text-[#D06D80] font-semibold flex items-start gap-1.5"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{copyError}</span>
+              </div>
+            )}
           </div>
 
           {/* Step 2: Send to chosen contact channel */}

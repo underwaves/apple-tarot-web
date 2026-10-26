@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createOrder, getAllOrders, getOrder, deleteOrder, clearAllOrders } from '@/lib/db';
 import { verifyAdminSession } from '@/lib/auth';
+import { verifyOrderSecret } from '@/lib/utils';
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const orderNo = searchParams.get('order_no');
-    const trackingToken = searchParams.get('tracking_token') || req.headers.get('x-tracking-token');
+    const orderNo = (searchParams.get('order_no') || '').trim();
+    const trackingToken = (
+      searchParams.get('tracking_token') ||
+      req.headers.get('x-tracking-token') ||
+      ''
+    ).trim();
     const isAdmin = await verifyAdminSession(req);
 
     // 1. Admin access: can view all orders or search by order_no without tracking token
@@ -23,23 +28,23 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, orders });
     }
 
-    // 2. Customer access: strictly requires BOTH order_no AND unguessable tracking_token
+    // 2. Customer access: strictly requires BOTH order_no AND unguessable secret tracking_token
     if (orderNo && trackingToken) {
       const order = await getOrder(orderNo, trackingToken);
-      if (!order) {
+      if (!order || !verifyOrderSecret(order, trackingToken)) {
         return NextResponse.json(
-          { success: false, error: 'ไม่พบคำสั่งซื้อ หรือรหัสติดตามไม่ถูกต้อง' },
-          { status: 404 }
+          { success: false, error: 'ไม่พบคำสั่งซื้อ หรือรหัสยืนยันไม่ถูกต้อง' },
+          { status: 403 }
         );
       }
       return NextResponse.json({ success: true, order });
     }
 
-    // 3. Public access without admin session or valid tracking credentials is prohibited
+    // 3. Public access without admin session or valid secret credentials is prohibited
     return NextResponse.json(
       {
         success: false,
-        error: 'Unauthorized: จำเป็นต้องเข้าสู่ระบบหลังบ้าน หรือระบุหมายเลขออเดอร์พร้อมรหัสติดตามสถานะ',
+        error: 'Unauthorized: จำเป็นต้องเข้าสู่ระบบหลังบ้าน หรือระบุหมายเลขออเดอร์พร้อมรหัสยืนยัน',
       },
       { status: 401 }
     );

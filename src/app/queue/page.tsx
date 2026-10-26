@@ -4,9 +4,37 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { QueueItem, PublicQueueItem } from '@/types';
-import { maskName, formatQueueNo } from '@/lib/utils';
+import { maskName, formatQueueNo, isSequentialOrGuessableToken } from '@/lib/utils';
 import { Search, Clock, ArrowLeft, RefreshCw, CheckCircle, AlertCircle, Sparkles, Key } from 'lucide-react';
 import AmbientCanvas from '@/components/AmbientCanvas';
+
+function buildQueueLookupUrl(orderInput: string, tokenInput: string): { url?: string; error?: string } {
+  const cleanOrder = orderInput.trim();
+  const cleanToken = tokenInput.trim();
+  const targetOrderNo = cleanOrder || cleanToken;
+
+  if (!targetOrderNo) {
+    return { error: 'กรุณากรอกเลขบิลคำสั่งซื้อ หรือรหัสติดตามสถานะ (เช่น 00001)' };
+  }
+
+  if (
+    cleanOrder &&
+    cleanToken &&
+    isSequentialOrGuessableToken(cleanToken, undefined) &&
+    formatQueueNo(cleanOrder) !== formatQueueNo(cleanToken)
+  ) {
+    return { error: 'เลขบิลคำสั่งซื้อและรหัสติดตามสถานะไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง' };
+  }
+
+  const shouldIncludeSecretToken =
+    Boolean(cleanToken) && !isSequentialOrGuessableToken(cleanToken, targetOrderNo);
+
+  const url = shouldIncludeSecretToken
+    ? `/api/queues?order_no=${encodeURIComponent(targetOrderNo)}&tracking_token=${encodeURIComponent(cleanToken)}`
+    : `/api/queues?order_no=${encodeURIComponent(targetOrderNo)}`;
+
+  return { url };
+}
 
 function QueueContent() {
   const searchParams = useSearchParams();
@@ -14,10 +42,11 @@ function QueueContent() {
   const initialToken = searchParams.get('tracking_token') || '';
 
   const [searchOrderNo, setSearchOrderNo] = useState(() => {
-    if (initialOrder) return initialOrder;
+    if (initialOrder) return formatQueueNo(initialOrder);
     if (typeof window !== 'undefined') {
       try {
-        return sessionStorage.getItem('apple_last_order_no') || '';
+        const saved = sessionStorage.getItem('apple_last_order_no') || '';
+        return saved ? formatQueueNo(saved) : '';
       } catch {
         return '';
       }
@@ -26,10 +55,16 @@ function QueueContent() {
   });
 
   const [searchTrackingToken, setSearchTrackingToken] = useState(() => {
-    if (initialToken) return initialToken;
+    if (initialToken && !initialToken.startsWith('trk_')) return formatQueueNo(initialToken);
+    if (initialOrder) return formatQueueNo(initialOrder);
     if (typeof window !== 'undefined') {
       try {
-        return sessionStorage.getItem('apple_last_tracking_token') || '';
+        const savedOrder = sessionStorage.getItem('apple_last_order_no') || '';
+        const savedToken = sessionStorage.getItem('apple_last_tracking_token') || '';
+        if (savedToken && !savedToken.startsWith('trk_') && /^\d+$/.test(savedToken)) {
+          return formatQueueNo(savedToken);
+        }
+        return savedOrder ? formatQueueNo(savedOrder) : '';
       } catch {
         return '';
       }
@@ -38,7 +73,7 @@ function QueueContent() {
   });
 
   const [publicQueues, setPublicQueues] = useState<PublicQueueItem[]>([]);
-  const [personalQueue, setPersonalQueue] = useState<QueueItem | null>(null);
+  const [personalQueue, setPersonalQueue] = useState<(QueueItem | PublicQueueItem) | null>(null);
   const [searchError, setSearchError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -50,12 +85,9 @@ function QueueContent() {
       if (data.success) {
         setPublicQueues(data.queues || []);
       }
-      if (searchOrderNo.trim() && searchTrackingToken.trim()) {
-        const trackRes = await fetch(
-          `/api/queues?order_no=${encodeURIComponent(searchOrderNo.trim())}&tracking_token=${encodeURIComponent(
-            searchTrackingToken.trim()
-          )}`
-        );
+      const lookup = buildQueueLookupUrl(searchOrderNo, searchTrackingToken);
+      if (lookup.url) {
+        const trackRes = await fetch(lookup.url);
         const trackData = await trackRes.json();
         if (trackData.success && trackData.queue) {
           setPersonalQueue(trackData.queue);
@@ -89,22 +121,21 @@ function QueueContent() {
     };
   }, []);
 
-  // Auto-search if both order_no and tracking_token are provided in URL or sessionStorage
+  // Auto-search if order_no is provided in URL or sessionStorage
   useEffect(() => {
     const targetOrder = initialOrder.trim() || searchOrderNo.trim();
     const targetToken = initialToken.trim() || searchTrackingToken.trim();
-    if (!targetOrder || !targetToken) return;
+    if (!targetOrder && !targetToken) return;
+
+    const lookup = buildQueueLookupUrl(targetOrder, targetToken);
+    if (!lookup.url) return;
 
     let ignore = false;
-    async function autoTrack() {
+    async function autoTrack(url: string) {
       setIsLoading(true);
       setSearchError('');
       try {
-        const res = await fetch(
-          `/api/queues?order_no=${encodeURIComponent(targetOrder)}&tracking_token=${encodeURIComponent(
-            targetToken
-          )}`
-        );
+        const res = await fetch(url);
         const data = await res.json();
         if (ignore) return;
         if (data.success && data.queue) {
@@ -122,7 +153,7 @@ function QueueContent() {
         if (!ignore) setIsLoading(false);
       }
     }
-    autoTrack();
+    autoTrack(lookup.url);
     return () => {
       ignore = true;
     };
@@ -130,23 +161,17 @@ function QueueContent() {
 
   const handleTrackOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchOrderNo.trim()) {
-      setSearchError('กรุณากรอกหมายเลขออเดอร์');
-      return;
-    }
-    if (!searchTrackingToken.trim()) {
-      setSearchError('กรุณากรอกรหัสติดตามสถานะ (เพื่อความปลอดภัยของข้อมูลส่วนตัว)');
+    const lookup = buildQueueLookupUrl(searchOrderNo, searchTrackingToken);
+    if (lookup.error || !lookup.url) {
+      setPersonalQueue(null);
+      setSearchError(lookup.error || 'กรุณากรอกเลขบิลคำสั่งซื้อ หรือรหัสติดตามสถานะ');
       return;
     }
 
     setIsLoading(true);
     setSearchError('');
     try {
-      const res = await fetch(
-        `/api/queues?order_no=${encodeURIComponent(searchOrderNo.trim())}&tracking_token=${encodeURIComponent(
-          searchTrackingToken.trim()
-        )}`
-      );
+      const res = await fetch(lookup.url);
       const data = await res.json();
       if (data.success && data.queue) {
         setPersonalQueue(data.queue);
@@ -251,7 +276,7 @@ function QueueContent() {
               <Key className="w-4 h-4 absolute left-3 top-3 text-[#A8B99A]" />
               <input
                 type="text"
-                placeholder="รหัสติดตามสถานะ"
+                placeholder="รหัสติดตามสถานะ (เช่น 00001)"
                 value={searchTrackingToken}
                 onChange={(e) => setSearchTrackingToken(e.target.value)}
                 className="pl-9 text-xs font-mono"
@@ -264,7 +289,7 @@ function QueueContent() {
               <span className="text-xs text-[#D06D80] font-medium">⚠️ {searchError}</span>
             ) : (
               <span className="text-[11px] text-[#947765]">
-                * เพื่อความเป็นส่วนตัว ต้องระบุรหัสติดตามที่ได้รับหลังสั่งซื้อ
+                * ใส่เลขบิล 5 หลัก (เช่น 00001) เพื่อตรวจสอบสถานะและเวลารอรับบริการ
               </span>
             )}
             <button
@@ -295,7 +320,7 @@ function QueueContent() {
                     )}
                   </div>
                   <span className="text-xs text-[#947765] block font-mono">
-                    บิลคำสั่งซื้อ: {formatQueueNo(personalQueue.order_no)} ({personalQueue.customer_name})
+                    บิลคำสั่งซื้อ: {formatQueueNo(personalQueue.order_no || personalQueue.queue_no)} ({personalQueue.customer_name})
                   </span>
                 </div>
               </div>
@@ -309,7 +334,7 @@ function QueueContent() {
               </div>
             </div>
 
-            {personalQueue.items_summary && (
+            {'items_summary' in personalQueue && personalQueue.items_summary && (
               <div className="mt-3 text-xs text-[#543E30] bg-[#FFF8EC] p-2.5 rounded-lg border border-[#FCE4EC]">
                 <span className="text-[11px] text-[#947765] block font-semibold">รายการ:</span>
                 <span>{personalQueue.items_summary}</span>
@@ -317,13 +342,13 @@ function QueueContent() {
             )}
 
             {personalQueue.estimated_time && (
-              <div className="mt-2 text-xs text-[#A8B99A] font-medium flex items-center gap-1">
+              <div className="mt-2 text-xs text-[#7D946D] font-semibold flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" />
                 <span>กำหนดเวลาโดยประมาณ: {personalQueue.estimated_time}</span>
               </div>
             )}
 
-            {personalQueue.shop_note && (
+            {'shop_note' in personalQueue && personalQueue.shop_note && (
               <div className="mt-2 text-xs text-[#543E30] bg-[#FCE4EC]/60 p-2.5 rounded-lg border border-[#F6B8C6]/50">
                 💬 ข้อความจากร้าน: {personalQueue.shop_note}
               </div>

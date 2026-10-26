@@ -45,9 +45,8 @@ export function generateOrderNo(seqNo?: number): string {
 }
 
 export function generateTrackingToken(): string {
-  // Unguessable, cryptographically secure 8-digit random numeric token
-  const n = crypto.randomInt(10000000, 100000000);
-  return String(n);
+  // High-entropy internal secret token for authenticating personal data and slip uploads (not shown as customer tracking code)
+  return crypto.randomBytes(16).toString('hex');
 }
 
 export function formatQueueNo(no: number | string | undefined | null): string {
@@ -57,6 +56,49 @@ export function formatQueueNo(no: number | string | undefined | null): string {
     return String(parsed).padStart(5, '0');
   }
   return String(no);
+}
+
+/**
+ * Checks if a token is a sequential number (e.g. "00001", "1") or matches the public order_no.
+ * Sequential numbers must NEVER be accepted as secret credentials for unlocking personal data.
+ */
+export function isSequentialOrGuessableToken(
+  token?: string | null,
+  orderNo?: string | null
+): boolean {
+  if (!token) return true;
+  const clean = token.trim().replace(/^#+/, '');
+  if (!clean) return true;
+  // Any 1-7 digit numeric code (e.g., 00001, 12345) is a sequential / guessable code
+  if (/^\d{1,7}$/.test(clean)) return true;
+  if (orderNo) {
+    const cleanOrder = orderNo.trim().replace(/^#+/, '');
+    if (clean.toLowerCase() === cleanOrder.toLowerCase()) return true;
+    if (formatQueueNo(clean) === formatQueueNo(cleanOrder)) return true;
+  }
+  return false;
+}
+
+/**
+ * Strictly verifies an unguessable secret token against an order's internal tracking_token.
+ * Rejects sequential numbers (like 00001) even if passed as tracking_token.
+ */
+export function verifyOrderSecret(
+  order: { order_no?: string; tracking_token?: string } | null | undefined,
+  providedToken?: string | null
+): boolean {
+  if (!order || !order.tracking_token || !providedToken) return false;
+  const cleanProvided = providedToken.trim();
+  const cleanStored = order.tracking_token.trim();
+  if (!cleanProvided || !cleanStored) return false;
+
+  if (isSequentialOrGuessableToken(cleanProvided, order.order_no)) return false;
+  if (isSequentialOrGuessableToken(cleanStored, order.order_no)) return false;
+
+  const bufA = Buffer.from(cleanProvided);
+  const bufB = Buffer.from(cleanStored);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 export function getEstimatedWaitTime(
@@ -150,10 +192,11 @@ export function formatBillText(order: {
     .join('\n');
 
   const waitTime = getEstimatedWaitTime(order.items, order.is_express);
+  const visibleCode = formatQueueNo(order.order_no || order.queue_no);
 
   const lines = [
-    `🍎 บิลคำสั่งซื้อ: ${order.order_no}`,
-    order.tracking_token ? `🔑 รหัสติดตามสถานะ (ห้ามแชร์): ${order.tracking_token}` : '',
+    `🍎 บิลคำสั่งซื้อ: ${visibleCode}`,
+    `🔑 รหัสติดตามสถานะ (ห้ามแชร์): ${visibleCode}`,
     order.queue_no ? `🏷️ คิวที่: #${formatQueueNo(order.queue_no)}` : '',
     `👤 ชื่อลูกค้า: ${order.customer_name}`,
   ];

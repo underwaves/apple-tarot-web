@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { QueueItem, PublicQueueItem } from '@/types';
-import { maskName, formatQueueNo } from '@/lib/utils';
+import { maskName, formatQueueNo, isSequentialOrGuessableToken } from '@/lib/utils';
 import { X, Search, Clock, RefreshCw, CheckCircle, AlertCircle, Sparkles, Key } from 'lucide-react';
 
 interface QueueModalProps {
@@ -11,16 +11,47 @@ interface QueueModalProps {
   initialOrderNo?: string;
 }
 
+function buildQueueLookupUrl(orderInput: string, tokenInput: string): { url?: string; error?: string } {
+  const cleanOrder = orderInput.trim();
+  const cleanToken = tokenInput.trim();
+  const targetOrderNo = cleanOrder || cleanToken;
+
+  if (!targetOrderNo) {
+    return { error: 'กรุณากรอกเลขบิลคำสั่งซื้อ หรือรหัสติดตามสถานะ (เช่น 00001)' };
+  }
+
+  // If both are entered as sequential numbers, ensure they match
+  if (
+    cleanOrder &&
+    cleanToken &&
+    isSequentialOrGuessableToken(cleanToken, undefined) &&
+    formatQueueNo(cleanOrder) !== formatQueueNo(cleanToken)
+  ) {
+    return { error: 'เลขบิลคำสั่งซื้อและรหัสติดตามสถานะไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง' };
+  }
+
+  // Only pass tracking_token query param if a non-sequential secret/legacy token was explicitly provided
+  const shouldIncludeSecretToken =
+    Boolean(cleanToken) && !isSequentialOrGuessableToken(cleanToken, targetOrderNo);
+
+  const url = shouldIncludeSecretToken
+    ? `/api/queues?order_no=${encodeURIComponent(targetOrderNo)}&tracking_token=${encodeURIComponent(cleanToken)}`
+    : `/api/queues?order_no=${encodeURIComponent(targetOrderNo)}`;
+
+  return { url };
+}
+
 export default function QueueModal({
   isOpen,
   onClose,
   initialOrderNo = '',
 }: QueueModalProps) {
   const [searchOrderNo, setSearchOrderNo] = useState(() => {
-    if (initialOrderNo) return initialOrderNo;
+    if (initialOrderNo) return formatQueueNo(initialOrderNo);
     if (typeof window !== 'undefined') {
       try {
-        return sessionStorage.getItem('apple_last_order_no') || '';
+        const saved = sessionStorage.getItem('apple_last_order_no') || '';
+        return saved ? formatQueueNo(saved) : '';
       } catch {
         return '';
       }
@@ -29,9 +60,15 @@ export default function QueueModal({
   });
 
   const [searchTrackingToken, setSearchTrackingToken] = useState(() => {
+    if (initialOrderNo) return formatQueueNo(initialOrderNo);
     if (typeof window !== 'undefined') {
       try {
-        return sessionStorage.getItem('apple_last_tracking_token') || '';
+        const savedOrder = sessionStorage.getItem('apple_last_order_no') || '';
+        const savedToken = sessionStorage.getItem('apple_last_tracking_token') || '';
+        if (savedToken && !savedToken.startsWith('trk_') && /^\d+$/.test(savedToken)) {
+          return formatQueueNo(savedToken);
+        }
+        return savedOrder ? formatQueueNo(savedOrder) : '';
       } catch {
         return '';
       }
@@ -41,7 +78,7 @@ export default function QueueModal({
 
   const [publicQueues, setPublicQueues] = useState<PublicQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [personalQueue, setPersonalQueue] = useState<QueueItem | null>(null);
+  const [personalQueue, setPersonalQueue] = useState<(QueueItem | PublicQueueItem) | null>(null);
   const [searchError, setSearchError] = useState('');
 
   const refreshQueues = async () => {
@@ -52,12 +89,9 @@ export default function QueueModal({
       if (data.success) {
         setPublicQueues(data.queues || []);
       }
-      if (searchOrderNo.trim() && searchTrackingToken.trim()) {
-        const trackRes = await fetch(
-          `/api/queues?order_no=${encodeURIComponent(searchOrderNo.trim())}&tracking_token=${encodeURIComponent(
-            searchTrackingToken.trim()
-          )}`
-        );
+      const lookup = buildQueueLookupUrl(searchOrderNo, searchTrackingToken);
+      if (lookup.url) {
+        const trackRes = await fetch(lookup.url);
         const trackData = await trackRes.json();
         if (trackData.success && trackData.queue) {
           setPersonalQueue(trackData.queue);
@@ -75,27 +109,29 @@ export default function QueueModal({
     if (!isOpen) return;
 
     let ignore = false;
-    let storedOrderNo = initialOrderNo;
-    let storedToken = '';
+    let storedOrderNo = initialOrderNo ? formatQueueNo(initialOrderNo) : '';
     if (typeof window !== 'undefined') {
       try {
         if (!storedOrderNo) {
-          storedOrderNo = sessionStorage.getItem('apple_last_order_no') || '';
+          const rawSaved = sessionStorage.getItem('apple_last_order_no') || '';
+          storedOrderNo = rawSaved ? formatQueueNo(rawSaved) : '';
         }
-        storedToken = sessionStorage.getItem('apple_last_tracking_token') || '';
       } catch {
         // ignore
       }
     }
 
     const effectiveOrderNo = searchOrderNo.trim() || storedOrderNo.trim();
-    const effectiveToken = searchTrackingToken.trim() || storedToken.trim();
+    const effectiveToken =
+      searchTrackingToken.trim() && !searchTrackingToken.trim().startsWith('trk_')
+        ? searchTrackingToken.trim()
+        : effectiveOrderNo;
 
     if (!searchOrderNo.trim() && storedOrderNo) {
       setSearchOrderNo(storedOrderNo);
     }
-    if (!searchTrackingToken.trim() && storedToken) {
-      setSearchTrackingToken(storedToken);
+    if ((!searchTrackingToken.trim() || searchTrackingToken.startsWith('trk_')) && effectiveOrderNo) {
+      setSearchTrackingToken(effectiveOrderNo);
     }
 
     async function load() {
@@ -106,12 +142,9 @@ export default function QueueModal({
           setPublicQueues(data.queues || []);
         }
 
-        if (effectiveOrderNo && effectiveToken) {
-          const trackRes = await fetch(
-            `/api/queues?order_no=${encodeURIComponent(effectiveOrderNo)}&tracking_token=${encodeURIComponent(
-              effectiveToken
-            )}`
-          );
+        const lookup = buildQueueLookupUrl(effectiveOrderNo, effectiveToken);
+        if (lookup.url) {
+          const trackRes = await fetch(lookup.url);
           const trackData = await trackRes.json();
           if (!ignore && trackData.success && trackData.queue) {
             setPersonalQueue(trackData.queue);
@@ -131,23 +164,17 @@ export default function QueueModal({
 
   const handleTrackOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchOrderNo.trim()) {
-      setSearchError('กรุณากรอกหมายเลขออเดอร์');
-      return;
-    }
-    if (!searchTrackingToken.trim()) {
-      setSearchError('กรุณากรอกรหัสติดตามสถานะ (เพื่อความปลอดภัยของข้อมูลส่วนตัว)');
+    const lookup = buildQueueLookupUrl(searchOrderNo, searchTrackingToken);
+    if (lookup.error || !lookup.url) {
+      setPersonalQueue(null);
+      setSearchError(lookup.error || 'กรุณากรอกเลขบิลคำสั่งซื้อ หรือรหัสติดตามสถานะ');
       return;
     }
 
     setIsLoading(true);
     setSearchError('');
     try {
-      const res = await fetch(
-        `/api/queues?order_no=${encodeURIComponent(searchOrderNo.trim())}&tracking_token=${encodeURIComponent(
-          searchTrackingToken.trim()
-        )}`
-      );
+      const res = await fetch(lookup.url);
       const data = await res.json();
       if (data.success && data.queue) {
         setPersonalQueue(data.queue);
@@ -244,7 +271,7 @@ export default function QueueModal({
               <Key className="w-4 h-4 absolute left-3 top-3 text-[#A8B99A]" />
               <input
                 type="text"
-                placeholder="รหัสติดตามสถานะ"
+                placeholder="รหัสติดตามสถานะ (เช่น 00001)"
                 value={searchTrackingToken}
                 onChange={(e) => setSearchTrackingToken(e.target.value)}
                 className="pl-9 text-xs font-mono"
@@ -257,7 +284,7 @@ export default function QueueModal({
               <span className="text-[11px] text-[#D06D80] font-medium">⚠️ {searchError}</span>
             ) : (
               <span className="text-[10px] text-[#947765]">
-                * ใส่เลขบิลคำสั่งซื้อและรหัสติดตามเพื่อดูสถานะคิวของท่าน
+                * ใส่เลขบิล 5 หลัก (เช่น 00001) เพื่อตรวจสอบสถานะและเวลารอรับบริการ
               </span>
             )}
             <button
@@ -288,7 +315,7 @@ export default function QueueModal({
                     )}
                   </div>
                   <span className="text-[11px] text-[#947765] block font-mono">
-                    บิลคำสั่งซื้อ: {formatQueueNo(personalQueue.order_no)} ({personalQueue.customer_name})
+                    บิลคำสั่งซื้อ: {formatQueueNo(personalQueue.order_no || personalQueue.queue_no)} ({personalQueue.customer_name})
                   </span>
                 </div>
               </div>
@@ -302,7 +329,7 @@ export default function QueueModal({
               </div>
             </div>
 
-            {personalQueue.items_summary && (
+            {'items_summary' in personalQueue && personalQueue.items_summary && (
               <div className="mt-2 text-xs text-[#543E30] bg-[#FFF8EC] p-2 rounded-lg border border-[#FCE4EC]">
                 <span className="text-[10px] text-[#947765] block font-semibold">รายการ:</span>
                 <span>{personalQueue.items_summary}</span>
@@ -310,13 +337,13 @@ export default function QueueModal({
             )}
 
             {personalQueue.estimated_time && (
-              <div className="mt-1.5 text-xs text-[#A8B99A] font-medium flex items-center gap-1">
+              <div className="mt-1.5 text-xs text-[#7D946D] font-semibold flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" />
                 <span>กำหนดเวลาโดยประมาณ: {personalQueue.estimated_time}</span>
               </div>
             )}
 
-            {personalQueue.shop_note && (
+            {'shop_note' in personalQueue && personalQueue.shop_note && (
               <div className="mt-1 text-xs text-[#543E30] bg-[#FCE4EC]/60 p-2 rounded-lg border border-[#F6B8C6]/50">
                 💬 ข้อความจากร้าน: {personalQueue.shop_note}
               </div>

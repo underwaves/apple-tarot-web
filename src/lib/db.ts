@@ -18,6 +18,7 @@ import {
   generateTrackingToken,
   getEstimatedWaitTime,
   formatQueueNo,
+  verifyOrderSecret,
 } from './utils';
 
 const ARCHIVED_MARKER = '\u200B';
@@ -40,11 +41,15 @@ function extractSeqNo(orderNo?: string | null): number {
   return 0;
 }
 
-function computeNextSequenceNumber(
+function computeMaxSequenceNumber(
   orders: { order_no?: string }[],
-  queues: { queue_no?: number; order_no?: string }[]
+  queues: { queue_no?: number; order_no?: string }[],
+  persistedLastSeq = 0
 ): number {
-  let maxSeq = 0;
+  let maxSeq =
+    typeof persistedLastSeq === 'number' && !isNaN(persistedLastSeq) && persistedLastSeq > 0
+      ? persistedLastSeq
+      : 0;
   for (const o of orders) {
     const seq = extractSeqNo(o.order_no);
     if (seq > maxSeq) maxSeq = seq;
@@ -56,7 +61,15 @@ function computeNextSequenceNumber(
     const qSeq = extractSeqNo(q.order_no);
     if (qSeq > maxSeq) maxSeq = qSeq;
   }
-  return maxSeq + 1;
+  return maxSeq;
+}
+
+function computeNextSequenceNumber(
+  orders: { order_no?: string }[],
+  queues: { queue_no?: number; order_no?: string }[],
+  persistedLastSeq = 0
+): number {
+  return computeMaxSequenceNumber(orders, queues, persistedLastSeq) + 1;
 }
 
 export function getOrderLookupCandidates(input: string): string[] {
@@ -118,6 +131,7 @@ export interface LocalDatabase {
   reviews: Review[];
   admin_password_hash?: string;
   admin_password_salt?: string;
+  last_order_seq?: number;
 }
 
 export const DEFAULT_STORE_DATA: LocalDatabase = {
@@ -338,6 +352,12 @@ export function readLocalDb(): LocalDatabase {
       reviews: parsed.reviews || DEFAULT_STORE_DATA.reviews,
       admin_password_hash: parsed.admin_password_hash,
       admin_password_salt: parsed.admin_password_salt,
+      last_order_seq:
+        typeof parsed.last_order_seq === 'number'
+          ? parsed.last_order_seq
+          : typeof parsedSettings.last_order_seq === 'number'
+          ? parsedSettings.last_order_seq
+          : undefined,
     };
   } catch (err) {
     throw new Error(`Failed to parse local database file: ${err instanceof Error ? err.message : String(err)}`);
@@ -678,37 +698,59 @@ export async function createOrder(data: {
     if (isNeonConfigured) {
       let newOrder: Order;
       try {
-        const [orders, queues] = await Promise.all([
+        const [orders, queues, savedLastSeq] = await Promise.all([
           neonGet<Order[]>('orders', []),
           neonGet<QueueItem[]>('queues', []),
+          neonGet<number>('last_order_seq', 0),
         ]);
-        const nextSeq = computeNextSequenceNumber(orders, queues);
+        const nextSeq = computeNextSequenceNumber(orders, queues, Number(savedLastSeq) || 0);
         newOrder = buildOrderObject(nextSeq);
         orders.unshift(newOrder);
-        await neonSet('orders', orders);
+        await Promise.all([neonSet('orders', orders), neonSet('last_order_seq', nextSeq)]);
       } catch (err) {
         console.error('Failed to save order to Neon:', err);
         const local = readLocalDb();
-        const nextSeq = computeNextSequenceNumber(local.orders, local.queues);
+        const nextSeq = computeNextSequenceNumber(
+          local.orders,
+          local.queues,
+          local.last_order_seq || 0
+        );
         newOrder = buildOrderObject(nextSeq);
       }
       try {
         const local = readLocalDb();
         local.orders.unshift(newOrder);
+        local.last_order_seq = Math.max(
+          local.last_order_seq || 0,
+          extractSeqNo(newOrder.order_no)
+        );
+        local.settings.last_order_seq = local.last_order_seq;
         writeLocalDb(local);
       } catch {}
       return normalizeOrderRecord(newOrder);
     }
 
     if (isSupabaseConfigured && supabaseAdmin) {
-      const [{ data: existingOrders }, { data: existingQueues }] = await Promise.all([
-        supabaseAdmin.from('orders').select('order_no'),
-        supabaseAdmin.from('queues').select('queue_no, order_no'),
-      ]);
-      let nextSeq = computeNextSequenceNumber(existingOrders || [], existingQueues || []);
+      const [{ data: existingOrders }, { data: existingQueues }, { data: seqRow }] =
+        await Promise.all([
+          supabaseAdmin.from('orders').select('order_no'),
+          supabaseAdmin.from('queues').select('queue_no, order_no'),
+          supabaseAdmin
+            .from('store_settings')
+            .select('value')
+            .eq('key', 'last_order_seq')
+            .maybeSingle(),
+        ]);
+      const savedLastSeq = seqRow && seqRow.value !== undefined ? Number(seqRow.value) || 0 : 0;
+      const nextSeq = computeNextSequenceNumber(
+        existingOrders || [],
+        existingQueues || [],
+        savedLastSeq
+      );
 
       for (let attempt = 0; attempt < 5; attempt++) {
-        const newOrder = buildOrderObject(nextSeq + attempt);
+        const candidateSeq = nextSeq + attempt;
+        const newOrder = buildOrderObject(candidateSeq);
         const { data: inserted, error } = await supabaseAdmin
           .from('orders')
           .insert({
@@ -743,6 +785,14 @@ export async function createOrder(data: {
           if (inserted) {
             newOrder.id = inserted.id;
           }
+          try {
+            await supabaseAdmin
+              .from('store_settings')
+              .upsert(
+                { key: 'last_order_seq', value: candidateSeq, updated_at: now },
+                { onConflict: 'key' }
+              );
+          } catch {}
           return normalizeOrderRecord(newOrder);
         }
 
@@ -757,9 +807,15 @@ export async function createOrder(data: {
 
     // Local File Mode
     const local = readLocalDb();
-    const nextSeq = computeNextSequenceNumber(local.orders, local.queues);
+    const nextSeq = computeNextSequenceNumber(
+      local.orders,
+      local.queues,
+      Math.max(local.last_order_seq || 0, local.settings.last_order_seq || 0)
+    );
     const newOrder = buildOrderObject(nextSeq);
     local.orders.unshift(newOrder);
+    local.last_order_seq = nextSeq;
+    local.settings.last_order_seq = nextSeq;
     writeLocalDb(local);
     return normalizeOrderRecord(newOrder);
   });
@@ -850,7 +906,7 @@ export async function getOrder(orderNoOrId: string, trackingToken?: string): Pro
     const order = orders.find(
       (o) =>
         (candidates.includes(o.order_no) || candidates.includes(o.id)) &&
-        (!cleanToken || o.tracking_token === cleanToken)
+        (!cleanToken || verifyOrderSecret(o, cleanToken))
     );
     if (order) return normalizeOrderRecord(order);
   }
@@ -872,14 +928,19 @@ export async function getOrder(orderNoOrId: string, trackingToken?: string): Pro
     if (error) {
       throw new Error(`Failed to fetch order from Supabase: ${error.message}`);
     }
-    return data ? normalizeOrderRecord(data as Order) : null;
+    if (!data) return null;
+    const normalized = normalizeOrderRecord(data as Order);
+    if (cleanToken && !verifyOrderSecret(normalized, cleanToken)) {
+      return null;
+    }
+    return normalized;
   }
 
   const local = readLocalDb();
   const order = local.orders.find(
     (o) =>
       (candidates.includes(o.order_no) || candidates.includes(o.id)) &&
-      (!cleanToken || o.tracking_token === cleanToken)
+      (!cleanToken || verifyOrderSecret(o, cleanToken))
   );
   return order ? normalizeOrderRecord(order) : null;
 }
@@ -907,41 +968,154 @@ export async function getAllOrders(): Promise<Order[]> {
 }
 
 export async function deleteOrder(orderIdOrNo: string): Promise<boolean> {
-  if (isNeonConfigured) {
-    let orders = await neonGet<Order[]>('orders', []);
-    orders = orders.filter((o) => o.id !== orderIdOrNo && o.order_no !== orderIdOrNo);
-    await neonSet('orders', orders);
+  return withOrderLock(async () => {
+    const candidates = getOrderLookupCandidates(orderIdOrNo);
+    const now = new Date().toISOString();
 
-    try {
-      const local = readLocalDb();
-      local.orders = local.orders.filter((o) => o.id !== orderIdOrNo && o.order_no !== orderIdOrNo);
-      writeLocalDb(local);
-    } catch {}
+    if (isNeonConfigured) {
+      const [orders, queues, savedLastSeq] = await Promise.all([
+        neonGet<Order[]>('orders', []),
+        neonGet<QueueItem[]>('queues', []),
+        neonGet<number>('last_order_seq', 0),
+      ]);
+      const preservedMax = computeMaxSequenceNumber(orders, queues, Number(savedLastSeq) || 0);
+      const filtered = orders.filter(
+        (o) => !candidates.includes(o.id) && !candidates.includes(o.order_no)
+      );
+      await Promise.all([
+        neonSet('orders', filtered),
+        neonSet('last_order_seq', preservedMax),
+      ]);
 
+      try {
+        const local = readLocalDb();
+        local.last_order_seq = Math.max(local.last_order_seq || 0, preservedMax);
+        local.settings.last_order_seq = local.last_order_seq;
+        local.orders = local.orders.filter(
+          (o) => !candidates.includes(o.id) && !candidates.includes(o.order_no)
+        );
+        writeLocalDb(local);
+      } catch {}
+
+      return true;
+    }
+
+    if (isSupabaseConfigured && supabaseAdmin) {
+      const [{ data: existingOrders }, { data: existingQueues }, { data: seqRow }] =
+        await Promise.all([
+          supabaseAdmin.from('orders').select('order_no'),
+          supabaseAdmin.from('queues').select('queue_no, order_no'),
+          supabaseAdmin
+            .from('store_settings')
+            .select('value')
+            .eq('key', 'last_order_seq')
+            .maybeSingle(),
+        ]);
+      const savedLastSeq = seqRow && seqRow.value !== undefined ? Number(seqRow.value) || 0 : 0;
+      const preservedMax = computeMaxSequenceNumber(
+        existingOrders || [],
+        existingQueues || [],
+        savedLastSeq
+      );
+      try {
+        await supabaseAdmin
+          .from('store_settings')
+          .upsert(
+            { key: 'last_order_seq', value: preservedMax, updated_at: now },
+            { onConflict: 'key' }
+          );
+      } catch {}
+
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        orderIdOrNo.trim()
+      );
+      if (isUuid) {
+        await supabaseAdmin.from('orders').delete().eq('id', orderIdOrNo.trim());
+      } else {
+        await supabaseAdmin.from('orders').delete().in('order_no', candidates);
+      }
+      return true;
+    }
+
+    const local = readLocalDb();
+    const preservedMax = computeMaxSequenceNumber(
+      local.orders,
+      local.queues,
+      Math.max(local.last_order_seq || 0, local.settings.last_order_seq || 0)
+    );
+    local.last_order_seq = preservedMax;
+    local.settings.last_order_seq = preservedMax;
+    local.orders = local.orders.filter(
+      (o) => !candidates.includes(o.id) && !candidates.includes(o.order_no)
+    );
+    writeLocalDb(local);
     return true;
-  }
-
-  const local = readLocalDb();
-  local.orders = local.orders.filter((o) => o.id !== orderIdOrNo && o.order_no !== orderIdOrNo);
-  writeLocalDb(local);
-  return true;
+  });
 }
 
 export async function clearAllOrders(): Promise<boolean> {
-  if (isNeonConfigured) {
-    await neonSet('orders', []);
-    try {
-      const local = readLocalDb();
-      local.orders = [];
-      writeLocalDb(local);
-    } catch {}
-    return true;
-  }
+  return withOrderLock(async () => {
+    const now = new Date().toISOString();
 
-  const local = readLocalDb();
-  local.orders = [];
-  writeLocalDb(local);
-  return true;
+    if (isNeonConfigured) {
+      const [orders, queues, savedLastSeq] = await Promise.all([
+        neonGet<Order[]>('orders', []),
+        neonGet<QueueItem[]>('queues', []),
+        neonGet<number>('last_order_seq', 0),
+      ]);
+      const preservedMax = computeMaxSequenceNumber(orders, queues, Number(savedLastSeq) || 0);
+      await Promise.all([neonSet('orders', []), neonSet('last_order_seq', preservedMax)]);
+      try {
+        const local = readLocalDb();
+        local.last_order_seq = Math.max(local.last_order_seq || 0, preservedMax);
+        local.settings.last_order_seq = local.last_order_seq;
+        local.orders = [];
+        writeLocalDb(local);
+      } catch {}
+      return true;
+    }
+
+    if (isSupabaseConfigured && supabaseAdmin) {
+      const [{ data: existingOrders }, { data: existingQueues }, { data: seqRow }] =
+        await Promise.all([
+          supabaseAdmin.from('orders').select('order_no'),
+          supabaseAdmin.from('queues').select('queue_no, order_no'),
+          supabaseAdmin
+            .from('store_settings')
+            .select('value')
+            .eq('key', 'last_order_seq')
+            .maybeSingle(),
+        ]);
+      const savedLastSeq = seqRow && seqRow.value !== undefined ? Number(seqRow.value) || 0 : 0;
+      const preservedMax = computeMaxSequenceNumber(
+        existingOrders || [],
+        existingQueues || [],
+        savedLastSeq
+      );
+      try {
+        await supabaseAdmin
+          .from('store_settings')
+          .upsert(
+            { key: 'last_order_seq', value: preservedMax, updated_at: now },
+            { onConflict: 'key' }
+          );
+      } catch {}
+      await supabaseAdmin.from('orders').delete().neq('order_no', '');
+      return true;
+    }
+
+    const local = readLocalDb();
+    const preservedMax = computeMaxSequenceNumber(
+      local.orders,
+      local.queues,
+      Math.max(local.last_order_seq || 0, local.settings.last_order_seq || 0)
+    );
+    local.last_order_seq = preservedMax;
+    local.settings.last_order_seq = preservedMax;
+    local.orders = [];
+    writeLocalDb(local);
+    return true;
+  });
 }
 
 export async function getAllQueues(): Promise<QueueItem[]> {
@@ -1019,12 +1193,9 @@ export async function confirmOrderPayment(orderIdOrNo: string) {
 
       let queueItem = queues.find((q) => q.order_no === order.order_no);
       if (!queueItem) {
-        const orderSeq = extractSeqNo(order.order_no);
-        const isOrderSeqFree =
-          orderSeq > 0 && !queues.some((q) => q.queue_no === orderSeq);
-        const nextQueueNo = isOrderSeqFree
-          ? orderSeq
-          : (queues.length > 0 ? Math.max(...queues.map((q) => q.queue_no)) : 0) + 1;
+        const maxQ =
+          queues.length > 0 ? Math.max(0, ...queues.map((q) => Number(q.queue_no) || 0)) : 0;
+        const nextQueueNo = maxQ + 1;
 
         const isExpress = Boolean(order.is_express);
         const defaultEstimated = getEstimatedWaitTime(order.items || [], isExpress);
@@ -1120,12 +1291,13 @@ export async function confirmOrderPayment(orderIdOrNo: string) {
         };
       }
 
-      // 4. Calculate next queue_no
+      // 4. Calculate next queue_no (continuing sequentially from current queues, starting at 1 if empty)
       const { data: allQ } = await supabaseAdmin.from('queues').select('queue_no');
-      const existingNos = new Set((allQ || []).map((q: { queue_no: number }) => q.queue_no));
-      const orderSeq = extractSeqNo(order.order_no);
-      const maxQ = allQ && allQ.length > 0 ? Math.max(...allQ.map((q: { queue_no: number }) => q.queue_no)) : 0;
-      const nextQueueNo = orderSeq > 0 && !existingNos.has(orderSeq) ? orderSeq : maxQ + 1;
+      const maxQ =
+        allQ && allQ.length > 0
+          ? Math.max(0, ...allQ.map((q: { queue_no: number }) => Number(q.queue_no) || 0))
+          : 0;
+      const nextQueueNo = maxQ + 1;
 
       const isExpress = Boolean(order.is_express);
       const defaultEstimated = getEstimatedWaitTime((order.items as Order['items']) || [], isExpress);
@@ -1190,12 +1362,11 @@ export async function confirmOrderPayment(orderIdOrNo: string) {
 
     let queueItem = local.queues.find((q) => q.order_no === order.order_no);
     if (!queueItem) {
-      const orderSeq = extractSeqNo(order.order_no);
-      const isOrderSeqFree =
-        orderSeq > 0 && !local.queues.some((q) => q.queue_no === orderSeq);
-      const nextQueueNo = isOrderSeqFree
-        ? orderSeq
-        : (local.queues.length > 0 ? Math.max(...local.queues.map((q) => q.queue_no)) : 0) + 1;
+      const maxQ =
+        local.queues.length > 0
+          ? Math.max(0, ...local.queues.map((q) => Number(q.queue_no) || 0))
+          : 0;
+      const nextQueueNo = maxQ + 1;
 
       const isExpress = Boolean(order.is_express);
       const defaultEstimated = getEstimatedWaitTime(order.items || [], isExpress);
@@ -1364,16 +1535,20 @@ export async function addManualQueue(data: {
       getEstimatedWaitTime([{ name: data.items_summary }], Boolean(data.is_express));
 
     if (isNeonConfigured) {
-      const [orders, queues] = await Promise.all([
+      const [orders, queues, savedLastSeq] = await Promise.all([
         neonGet<Order[]>('orders', []),
         neonGet<QueueItem[]>('queues', []),
+        neonGet<number>('last_order_seq', 0),
       ]);
-      const nextQueueNo = computeNextSequenceNumber(orders, queues);
+      const maxQ =
+        queues.length > 0 ? Math.max(0, ...queues.map((q) => Number(q.queue_no) || 0)) : 0;
+      const nextQueueNo = maxQ + 1;
+      const nextOrderSeq = computeNextSequenceNumber(orders, queues, Number(savedLastSeq) || 0);
 
       const newQueue: QueueItem = {
         id: 'q-man-' + Date.now(),
         queue_no: nextQueueNo,
-        order_no: formatQueueNo(nextQueueNo),
+        order_no: formatQueueNo(nextOrderSeq),
         customer_name: data.customer_name,
         items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
         contact_info: data.contact_info || '-',
@@ -1388,10 +1563,12 @@ export async function addManualQueue(data: {
       };
 
       queues.push(newQueue);
-      await neonSet('queues', queues);
+      await Promise.all([neonSet('queues', queues), neonSet('last_order_seq', nextOrderSeq)]);
 
       try {
         const local = readLocalDb();
+        local.last_order_seq = Math.max(local.last_order_seq || 0, nextOrderSeq);
+        local.settings.last_order_seq = local.last_order_seq;
         local.queues.push(newQueue);
         writeLocalDb(local);
       } catch {}
@@ -1400,14 +1577,33 @@ export async function addManualQueue(data: {
     }
 
     if (isSupabaseConfigured && supabaseAdmin) {
-      const [{ data: existingOrders }, { data: existingQueues }] = await Promise.all([
-        supabaseAdmin.from('orders').select('order_no'),
-        supabaseAdmin.from('queues').select('queue_no, order_no'),
-      ]);
-      const nextQueueNo = computeNextSequenceNumber(existingOrders || [], existingQueues || []);
+      const [{ data: existingOrders }, { data: existingQueues }, { data: seqRow }] =
+        await Promise.all([
+          supabaseAdmin.from('orders').select('order_no'),
+          supabaseAdmin.from('queues').select('queue_no, order_no'),
+          supabaseAdmin
+            .from('store_settings')
+            .select('value')
+            .eq('key', 'last_order_seq')
+            .maybeSingle(),
+        ]);
+      const savedLastSeq = seqRow && seqRow.value !== undefined ? Number(seqRow.value) || 0 : 0;
+      const maxQ =
+        existingQueues && existingQueues.length > 0
+          ? Math.max(
+              0,
+              ...existingQueues.map((q: { queue_no?: number }) => Number(q.queue_no) || 0)
+            )
+          : 0;
+      const nextQueueNo = maxQ + 1;
+      const nextOrderSeq = computeNextSequenceNumber(
+        existingOrders || [],
+        existingQueues || [],
+        savedLastSeq
+      );
       const newQueuePayload = {
         queue_no: nextQueueNo,
-        order_no: formatQueueNo(nextQueueNo),
+        order_no: formatQueueNo(nextOrderSeq),
         customer_name: data.customer_name,
         items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
         contact_info: data.contact_info || '-',
@@ -1429,16 +1625,33 @@ export async function addManualQueue(data: {
       if (error) {
         throw new Error(`Failed to add manual queue to Supabase: ${error.message}`);
       }
+      try {
+        await supabaseAdmin
+          .from('store_settings')
+          .upsert(
+            { key: 'last_order_seq', value: nextOrderSeq, updated_at: now },
+            { onConflict: 'key' }
+          );
+      } catch {}
       return normalizeQueueRecord(inserted as QueueItem);
     }
 
     const local = readLocalDb();
-    const nextQueueNo = computeNextSequenceNumber(local.orders, local.queues);
+    const maxQ =
+      local.queues.length > 0
+        ? Math.max(0, ...local.queues.map((q) => Number(q.queue_no) || 0))
+        : 0;
+    const nextQueueNo = maxQ + 1;
+    const nextOrderSeq = computeNextSequenceNumber(
+      local.orders,
+      local.queues,
+      Math.max(local.last_order_seq || 0, local.settings.last_order_seq || 0)
+    );
 
     const newQueue: QueueItem = {
       id: 'q-man-' + Date.now(),
       queue_no: nextQueueNo,
-      order_no: formatQueueNo(nextQueueNo),
+      order_no: formatQueueNo(nextOrderSeq),
       customer_name: data.customer_name,
       items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
       contact_info: data.contact_info || '-',
@@ -1452,6 +1665,8 @@ export async function addManualQueue(data: {
       updated_at: now,
     };
 
+    local.last_order_seq = nextOrderSeq;
+    local.settings.last_order_seq = nextOrderSeq;
     local.queues.push(newQueue);
     writeLocalDb(local);
     return normalizeQueueRecord(newQueue);
@@ -1459,32 +1674,232 @@ export async function addManualQueue(data: {
 }
 
 export async function deleteQueue(queueId: string): Promise<boolean> {
-  if (isNeonConfigured) {
-    let queues = await neonGet<QueueItem[]>('queues', []);
-    queues = queues.filter((q) => q.id !== queueId);
-    await neonSet('queues', queues);
+  return withOrderLock(async () => {
+    const now = new Date().toISOString();
 
-    try {
-      const local = readLocalDb();
-      local.queues = local.queues.filter((q) => q.id !== queueId);
-      writeLocalDb(local);
-    } catch {}
+    if (isNeonConfigured) {
+      const [orders, queues, savedLastSeq] = await Promise.all([
+        neonGet<Order[]>('orders', []),
+        neonGet<QueueItem[]>('queues', []),
+        neonGet<number>('last_order_seq', 0),
+      ]);
+      const preservedMax = computeMaxSequenceNumber(orders, queues, Number(savedLastSeq) || 0);
+      const filtered = queues.filter((q) => q.id !== queueId);
+      await Promise.all([neonSet('queues', filtered), neonSet('last_order_seq', preservedMax)]);
 
-    return true;
-  }
+      try {
+        const local = readLocalDb();
+        local.last_order_seq = Math.max(local.last_order_seq || 0, preservedMax);
+        local.settings.last_order_seq = local.last_order_seq;
+        local.queues = local.queues.filter((q) => q.id !== queueId);
+        writeLocalDb(local);
+      } catch {}
 
-  if (isSupabaseConfigured && supabaseAdmin) {
-    const { error } = await supabaseAdmin.from('queues').delete().eq('id', queueId);
-    if (error) {
-      throw new Error(`Failed to delete queue in Supabase: ${error.message}`);
+      return true;
     }
-    return true;
-  }
 
-  const local = readLocalDb();
-  local.queues = local.queues.filter((q) => q.id !== queueId);
-  writeLocalDb(local);
-  return true;
+    if (isSupabaseConfigured && supabaseAdmin) {
+      const [{ data: existingOrders }, { data: existingQueues }, { data: seqRow }] =
+        await Promise.all([
+          supabaseAdmin.from('orders').select('order_no'),
+          supabaseAdmin.from('queues').select('queue_no, order_no'),
+          supabaseAdmin
+            .from('store_settings')
+            .select('value')
+            .eq('key', 'last_order_seq')
+            .maybeSingle(),
+        ]);
+      const savedLastSeq = seqRow && seqRow.value !== undefined ? Number(seqRow.value) || 0 : 0;
+      const preservedMax = computeMaxSequenceNumber(
+        existingOrders || [],
+        existingQueues || [],
+        savedLastSeq
+      );
+      try {
+        await supabaseAdmin
+          .from('store_settings')
+          .upsert(
+            { key: 'last_order_seq', value: preservedMax, updated_at: now },
+            { onConflict: 'key' }
+          );
+      } catch {}
+
+      const { error } = await supabaseAdmin.from('queues').delete().eq('id', queueId);
+      if (error) {
+        throw new Error(`Failed to delete queue in Supabase: ${error.message}`);
+      }
+      return true;
+    }
+
+    const local = readLocalDb();
+    const preservedMax = computeMaxSequenceNumber(
+      local.orders,
+      local.queues,
+      Math.max(local.last_order_seq || 0, local.settings.last_order_seq || 0)
+    );
+    local.last_order_seq = preservedMax;
+    local.settings.last_order_seq = preservedMax;
+    local.queues = local.queues.filter((q) => q.id !== queueId);
+    writeLocalDb(local);
+    return true;
+  });
+}
+
+/**
+ * Deletes ONLY completed queues that have been moved to the "คิวเสร็จแล้ว" tab
+ * (status === 'เสร็จแล้ว' && is_archived === true), and renumbers any remaining
+ * working queues sequentially starting from 1 (00001, 00002, ...) in their original order
+ * without modifying order_no, tracking_token, order_id, or queue id.
+ */
+export async function clearCompletedQueues(): Promise<{
+  deletedCount: number;
+  remainingQueues: QueueItem[];
+}> {
+  return withOrderLock(async () => {
+    const now = new Date().toISOString();
+
+    const isCompletedInTab = (q: QueueItem): boolean => {
+      const norm = normalizeQueueRecord(q);
+      return Boolean(norm.is_archived) && norm.status === 'เสร็จแล้ว';
+    };
+
+    const sortByOriginalOrder = (list: QueueItem[]): QueueItem[] =>
+      [...list].sort((a, b) => {
+        if (a.queue_no !== b.queue_no) return a.queue_no - b.queue_no;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+    if (isNeonConfigured) {
+      const [orders, queues, savedLastSeq] = await Promise.all([
+        neonGet<Order[]>('orders', []),
+        neonGet<QueueItem[]>('queues', []),
+        neonGet<number>('last_order_seq', 0),
+      ]);
+      const preservedOrderMax = computeMaxSequenceNumber(
+        orders,
+        queues,
+        Number(savedLastSeq) || 0
+      );
+
+      const normalizedAll = queues.map(normalizeQueueRecord);
+      const toDelete = normalizedAll.filter(isCompletedInTab);
+      const toKeep = sortByOriginalOrder(normalizedAll.filter((q) => !isCompletedInTab(q)));
+
+      const renumbered: QueueItem[] = toKeep.map((q, idx) => ({
+        ...q,
+        queue_no: idx + 1,
+        updated_at: now,
+      }));
+
+      await Promise.all([
+        neonSet('queues', renumbered),
+        neonSet('last_order_seq', preservedOrderMax),
+      ]);
+
+      try {
+        const local = readLocalDb();
+        local.last_order_seq = Math.max(local.last_order_seq || 0, preservedOrderMax);
+        local.settings.last_order_seq = local.last_order_seq;
+        local.queues = renumbered;
+        writeLocalDb(local);
+      } catch {}
+
+      return { deletedCount: toDelete.length, remainingQueues: renumbered };
+    }
+
+    if (isSupabaseConfigured && supabaseAdmin) {
+      const [{ data: existingOrders }, { data: existingQueues, error: qErr }, { data: seqRow }] =
+        await Promise.all([
+          supabaseAdmin.from('orders').select('order_no'),
+          supabaseAdmin.from('queues').select('*').order('queue_no', { ascending: true }),
+          supabaseAdmin
+            .from('store_settings')
+            .select('value')
+            .eq('key', 'last_order_seq')
+            .maybeSingle(),
+        ]);
+
+      if (qErr) {
+        throw new Error(`Failed to fetch queues from Supabase: ${qErr.message}`);
+      }
+
+      const savedLastSeq = seqRow && seqRow.value !== undefined ? Number(seqRow.value) || 0 : 0;
+      const allRows = ((existingQueues as QueueItem[]) || []).map(normalizeQueueRecord);
+      const preservedOrderMax = computeMaxSequenceNumber(
+        existingOrders || [],
+        allRows,
+        savedLastSeq
+      );
+
+      try {
+        await supabaseAdmin
+          .from('store_settings')
+          .upsert(
+            { key: 'last_order_seq', value: preservedOrderMax, updated_at: now },
+            { onConflict: 'key' }
+          );
+      } catch {}
+
+      const toDelete = allRows.filter(isCompletedInTab);
+      const toKeep = sortByOriginalOrder(allRows.filter((q) => !isCompletedInTab(q)));
+
+      if (toDelete.length > 0) {
+        const deleteIds = toDelete.map((q) => q.id);
+        const { error: delErr } = await supabaseAdmin
+          .from('queues')
+          .delete()
+          .in('id', deleteIds);
+        if (delErr) {
+          throw new Error(`Failed to delete completed queues in Supabase: ${delErr.message}`);
+        }
+      }
+
+      const renumbered: QueueItem[] = [];
+      for (let idx = 0; idx < toKeep.length; idx++) {
+        const q = toKeep[idx];
+        const newQueueNo = idx + 1;
+        if (q.queue_no !== newQueueNo) {
+          const { data: updatedRow, error: updErr } = await supabaseAdmin
+            .from('queues')
+            .update({ queue_no: newQueueNo, updated_at: now })
+            .eq('id', q.id)
+            .select()
+            .single();
+          if (updErr) {
+            throw new Error(`Failed to renumber queue in Supabase: ${updErr.message}`);
+          }
+          renumbered.push(normalizeQueueRecord(updatedRow as QueueItem));
+        } else {
+          renumbered.push(q);
+        }
+      }
+
+      return { deletedCount: toDelete.length, remainingQueues: renumbered };
+    }
+
+    const local = readLocalDb();
+    const preservedOrderMax = computeMaxSequenceNumber(
+      local.orders,
+      local.queues,
+      Math.max(local.last_order_seq || 0, local.settings.last_order_seq || 0)
+    );
+    local.last_order_seq = preservedOrderMax;
+    local.settings.last_order_seq = preservedOrderMax;
+
+    const normalizedAll = local.queues.map(normalizeQueueRecord);
+    const toDelete = normalizedAll.filter(isCompletedInTab);
+    const toKeep = sortByOriginalOrder(normalizedAll.filter((q) => !isCompletedInTab(q)));
+
+    const renumbered: QueueItem[] = toKeep.map((q, idx) => ({
+      ...q,
+      queue_no: idx + 1,
+      updated_at: now,
+    }));
+
+    local.queues = renumbered;
+    writeLocalDb(local);
+    return { deletedCount: toDelete.length, remainingQueues: renumbered };
+  });
 }
 
 export async function saveCategories(categories: Category[]): Promise<Category[]> {

@@ -571,6 +571,59 @@ export default function AdminDashboard({
     }
   };
 
+  // Clear all completed queues in the "คิวเสร็จแล้ว" tab and renumber working queues starting from 00001
+  const handleClearCompletedQueues = () => {
+    const completedToDelete = queues.filter(
+      (q) => Boolean(q.is_archived) && q.status === 'เสร็จแล้ว'
+    );
+    const deleteCount = completedToDelete.length;
+    if (deleteCount === 0) {
+      showFeedback('ไม่มีรายการคิวเสร็จแล้วที่จะลบค่ะ', true);
+      return;
+    }
+
+    const workingCount = queues.filter(
+      (q) => !(Boolean(q.is_archived) && q.status === 'เสร็จแล้ว')
+    ).length;
+
+    setConfirmDialog({
+      isOpen: true,
+      title: `ยืนยันการลบคิวเสร็จแล้วทั้งหมด (${deleteCount} รายการ)`,
+      message:
+        workingCount > 0
+          ? `คุณต้องการลบรายการในแท็บ "คิวเสร็จแล้ว" ทั้งหมดจำนวน ${deleteCount} รายการใช่หรือไม่? การลบนี้ลบแล้วกู้คืนไม่ได้ (คิวงานที่กำลังทำ ${workingCount} รายการจะถูกจัดเลขคิวใหม่เริ่มตั้งแต่ 00001 โดยไม่ลบคำสั่งซื้อ ประวัติการชำระเงิน หรือรูปสลิป)`
+          : `คุณต้องการลบรายการในแท็บ "คิวเสร็จแล้ว" ทั้งหมดจำนวน ${deleteCount} รายการใช่หรือไม่? การลบนี้ลบแล้วกู้คืนไม่ได้ และระบบจะเริ่มนับเลขคิวใหม่จาก 00001 (ไม่ลบคำสั่งซื้อ ประวัติการชำระเงิน หรือรูปสลิป)`,
+      confirmText: `ยืนยันลบทั้งหมด (${deleteCount} รายการ)`,
+      cancelText: 'ยกเลิก',
+      variant: 'danger',
+      icon: <Trash2 className="w-6 h-6 text-[#D06D80]" />,
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/queues', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'clear_completed' }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            if (Array.isArray(data.queues)) {
+              setQueues(data.queues);
+            }
+            await loadAllData();
+            if (onDataUpdated) onDataUpdated();
+            showFeedback(
+              `ลบคิวเสร็จแล้วทั้งหมด ${data.deleted_count ?? deleteCount} รายการ และเริ่มเลขคิวใหม่จาก 00001 เรียบร้อยแล้วค่ะ ✓`
+            );
+          } else {
+            showFeedback(data.error || 'ลบคิวเสร็จแล้วทั้งหมดไม่สำเร็จ', true);
+          }
+        } catch {
+          showFeedback('เกิดข้อผิดพลาดในการลบคิวเสร็จแล้วทั้งหมด', true);
+        }
+      },
+    });
+  };
+
   // Test shop notification (LINE / Webhook)
   const handleTestNotification = async () => {
     if (!settings) return;
@@ -1735,8 +1788,12 @@ export default function AdminDashboard({
   const activeQueuesCount = queues.filter(
     (q) => !q.is_archived && q.status !== 'เสร็จแล้ว' && q.status !== 'ยกเลิก'
   ).length;
-  const workingQueuesList = queues.filter((q) => !q.is_archived);
-  const completedQueuesList = queues.filter((q) => Boolean(q.is_archived));
+  const workingQueuesList = queues.filter(
+    (q) => !(Boolean(q.is_archived) && q.status === 'เสร็จแล้ว')
+  );
+  const completedQueuesList = queues.filter(
+    (q) => Boolean(q.is_archived) && q.status === 'เสร็จแล้ว'
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-md animate-in fade-in duration-200">
@@ -2130,11 +2187,9 @@ export default function AdminDashboard({
                                 <p>ที่อยู่: {[o.shipping_address, o.shipping_subdistrict, o.shipping_district, o.shipping_province, o.shipping_postal_code].filter(Boolean).join(' ')}</p>
                               </div>
                             )}
-                            {o.tracking_token && (
-                              <p className="mt-1 text-[11px] font-mono text-[#A8B99A]">
-                                <strong>🔑 Tracking Token:</strong> {o.tracking_token}
-                              </p>
-                            )}
+                            <p className="mt-1 text-[11px] font-mono text-[#A8B99A]">
+                              <strong>🔑 รหัสติดตามสถานะ:</strong> {formatQueueNo(o.order_no)}
+                            </p>
                             <div className="mt-2 text-[#543E30]">
                               <strong>รายการ:</strong>
                               <ul className="list-disc list-inside mt-0.5">
@@ -2275,6 +2330,29 @@ export default function AdminDashboard({
                       <span>✅ คิวเสร็จแล้ว ({completedQueuesList.length})</span>
                     </button>
                   </div>
+
+                  {/* Action bar shown ONLY in the "คิวเสร็จแล้ว" tab */}
+                  {queueSubTab === 'completed' && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 bg-[#FFF8EC] rounded-xl border border-[#F6B8C6]/60">
+                      <div className="text-xs text-[#543E30]">
+                        <p className="font-bold text-[#2E7D32]">
+                          จัดการรายการคิวเสร็จแล้ว ({completedQueuesList.length} รายการ)
+                        </p>
+                        <p className="text-[11px] text-[#947765]">
+                          เมื่อลบคิวเสร็จแล้วทั้งหมด ระบบจะเริ่มนับเลขคิวใหม่จาก 00001 (ไม่ลบออเดอร์หรือสลิป)
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClearCompletedQueues}
+                        disabled={completedQueuesList.length === 0}
+                        className="px-3.5 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>ลบคิวเสร็จแล้วทั้งหมด</span>
+                      </button>
+                    </div>
+                  )}
 
                   {(() => {
                     const sourceList =

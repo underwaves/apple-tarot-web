@@ -5,6 +5,8 @@ import crypto from 'crypto';
 import { getOrder, uploadSlip, getStoreData } from '@/lib/db';
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase';
 import { dispatchShopNotification, formatSlipNotificationMessage } from '@/lib/notifications';
+import { verifyAdminSession } from '@/lib/auth';
+import { verifyOrderSecret } from '@/lib/utils';
 
 // Store slips outside public directory to prevent direct execution / unauthenticated public scraping
 function getSlipStorageDir(): string {
@@ -130,7 +132,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Verify order exists before saving any file to disk or storage
+    if (!trackingToken) {
+      trackingToken = (req.headers.get('x-tracking-token') || '').trim();
+    }
+
+    const isAdmin = await verifyAdminSession(req);
+
+    // Verify order exists and authorize BEFORE saving any file to disk or storage
     const existingOrder = await getOrder(orderNo);
     if (!existingOrder) {
       return NextResponse.json(
@@ -139,9 +147,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (trackingToken && existingOrder.tracking_token && existingOrder.tracking_token !== trackingToken) {
+    if (!isAdmin && !verifyOrderSecret(existingOrder, trackingToken)) {
       return NextResponse.json(
-        { success: false, error: 'รหัสติดตามออเดอร์ไม่ถูกต้อง' },
+        { success: false, error: 'ไม่ได้รับอนุญาต: รหัสยืนยันคำสั่งซื้อไม่ถูกต้องหรือไม่ได้ระบุ' },
         { status: 403 }
       );
     }

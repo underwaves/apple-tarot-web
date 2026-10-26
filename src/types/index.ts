@@ -82,6 +82,7 @@ export interface QueueItem {
 export interface PublicQueueItem {
   id: string;
   queue_no: number;
+  order_no?: string;
   customer_name: string;
   status: QueueStatus;
   is_express?: boolean;
@@ -154,6 +155,7 @@ export interface StoreSettings {
   webhook_url?: string;
   notify_on_slip?: boolean;
   notify_on_queue?: boolean;
+  last_order_seq?: number;
 }
 
 export interface MusicTrack {

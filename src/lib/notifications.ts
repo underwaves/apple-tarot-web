@@ -158,19 +158,17 @@ export function formatCustomerQueueUpdateMessage(
   queue: QueueItem,
   shopName: string,
   hostUrl: string,
-  trackingToken?: string
+  _trackingToken?: string
 ): string {
   const cleanHost = hostUrl.replace(/\/+$/, '');
-  const cleanToken = trackingToken ? trackingToken.trim() : '';
+  const visibleNo = formatQueueNo(queue.order_no || queue.queue_no);
 
-  const trackingLines = cleanToken
-    ? [
-        `🔗 ตรวจสอบคิวของคุณได้ที่:`,
-        `${cleanHost}/queue?order_no=${encodeURIComponent(queue.order_no)}&tracking_token=${encodeURIComponent(cleanToken)}`,
-      ]
-    : [
-        `💡 สำหรับการติดตามสถานะคิว สามารถติดต่อสอบถามแม่หมอได้โดยตรงทางแชทนี้ พร้อมแจ้งหมายเลขออเดอร์ #${queue.order_no} ได้เลยนะคะ 💬`,
-      ];
+  const trackingLines = [
+    `🔑 รหัสติดตามสถานะ: ${visibleNo}`,
+    cleanHost
+      ? `🔗 ตรวจสอบคิวของคุณได้ที่: ${cleanHost}/queue?order_no=${encodeURIComponent(visibleNo)}`
+      : `💡 แจ้งเลขบิล #${visibleNo} เพื่อตรวจสอบสถานะคิวได้เลยนะคะ 💬`,
+  ];
 
   const lines = [
     `สวัสดีค่ะคุณ ${queue.customer_name} 🍎`,
