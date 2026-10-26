@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { PackageItem } from '@/types';
-import { formatBaht } from '@/lib/utils';
-import { X, Plus, Minus, Trash2, ArrowRight } from 'lucide-react';
+import { formatBaht, getEstimatedWaitTime } from '@/lib/utils';
+import { X, Plus, Minus, Trash2, ArrowRight, Clock } from 'lucide-react';
 
 interface CartModalProps {
   isOpen: boolean;
@@ -106,6 +106,16 @@ export default function CartModal({
         {/* Footer / Summary */}
         {cartItems.length > 0 && (
           <div className="border-t border-[#FCE4EC] pt-3.5 mt-2 space-y-3">
+            <div className="bg-[#FFFEFA] border border-[#F6B8C6]/70 rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-xs">
+              <span className="text-[#947765] flex items-center gap-1.5 font-medium">
+                <Clock className="w-3.5 h-3.5 text-[#D06D80] shrink-0" />
+                <span>เวลารอรับบริการ:</span>
+              </span>
+              <span className="font-bold text-[#D06D80] text-right">
+                {getEstimatedWaitTime(cartItems.map((it) => it.pkg))}
+              </span>
+            </div>
+
             <div className="flex items-baseline justify-between px-1">
               <span className="text-sm text-[#947765]">ยอดรวมทั้งหมด:</span>
               <span className="font-serif font-bold text-2xl text-[#D06D80]">

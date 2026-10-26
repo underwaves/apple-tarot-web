@@ -1,4 +1,5 @@
 import { Order, QueueItem, StoreSettings } from '@/types';
+import { formatQueueNo } from './utils';
 
 export interface SendResult {
   success: boolean;
@@ -120,9 +121,10 @@ export function formatSlipNotificationMessage(
     .map((item) => `• ${item.name} (x${item.quantity}) - ฿${item.price * item.quantity}`)
     .join('\n');
 
+  const relStatus = order.relationship_status || order.birth_time;
   const fortuneInfo = [
     order.birth_date ? `🎂 วันเกิด: ${order.birth_date}` : null,
-    order.birth_time ? `⏰ เวลาเกิด: ${order.birth_time}` : null,
+    relStatus ? `💕 สถานะความรัก: ${relStatus}` : null,
     order.zodiac_sign ? `♈ ราศี: ${order.zodiac_sign}` : null,
     order.question ? `🔮 คำถาม: "${order.question}"` : null,
   ]
@@ -132,7 +134,7 @@ export function formatSlipNotificationMessage(
   const lines = [
     `🔔 [${settings.shop_name || 'Auralune'}] มีลูกค้าแนบสลิปใหม่รอตรวจ!`,
     `━━━━━━━━━━━━━━━━━━━━`,
-    `📋 หมายเลขออเดอร์: #${order.order_no}`,
+    `📋 บิลคำสั่งซื้อ: #${formatQueueNo(order.order_no)}`,
     `👤 ลูกค้า: คุณ ${order.customer_name}`,
     `💰 ยอดโอน: ฿${order.total_amount.toLocaleString()}`,
     order.is_express ? `⚡ ประเภทคิว: คิวด่วนพิเศษ (Express)` : `⏱️ ประเภทคิว: คิวปกติ`,
@@ -174,7 +176,7 @@ export function formatCustomerQueueUpdateMessage(
     `สวัสดีค่ะคุณ ${queue.customer_name} 🍎`,
     `อัปเดตสถานะคิวดูดวงจากร้าน ${shopName} นะคะ ✨`,
     ``,
-    `📋 คิวที่: #${queue.queue_no} (ออเดอร์: ${queue.order_no})`,
+    `📋 คิวที่: #${formatQueueNo(queue.queue_no)} (บิลคำสั่งซื้อ: ${formatQueueNo(queue.order_no)})`,
     `🔮 สถานะปัจจุบัน: "${queue.status}"`,
     queue.estimated_time ? `⏱️ ระยะเวลาโดยประมาณ: ${queue.estimated_time}` : '',
     queue.shop_note ? `📝 ข้อความจากแม่หมอ: ${queue.shop_note}` : '',

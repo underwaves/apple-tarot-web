@@ -80,11 +80,12 @@ export default function HomePage() {
     ) {
       const mockOrder: Order = {
         id: 'ord-mock-showcase-01',
-        order_no: 'APL-261025-APP777',
-        tracking_token: 'trk_7d8e9f1a2b3c4d5e',
+        order_no: '00001',
+        tracking_token: '48291037',
         order_type: 'fortune',
         customer_name: 'คุณณิชาภัทร สวนแอปเปิ้ล',
-        contact_channel: 'line',
+        relationship_status: 'มีคนคุย',
+        contact_channel: 'LINE',
         contact_value: '@nichapat_tarot',
         items: [
           {
@@ -220,6 +221,7 @@ export default function HomePage() {
     order_type: OrderType;
     birth_date?: string;
     birth_time?: string;
+    relationship_status?: string;
     zodiac_sign?: string;
     question?: string;
     shipping_name?: string;
@@ -232,6 +234,7 @@ export default function HomePage() {
     customer_note?: string;
     contact_channel: string;
     contact_value: string;
+    is_express?: boolean;
   }) => {
     setIsCreatingOrder(true);
     try {

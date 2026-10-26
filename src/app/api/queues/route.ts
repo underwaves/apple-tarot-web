@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   getAllQueues,
+  getAllOrders,
   getQueueByOrder,
   updateQueueStatus,
   addManualQueue,
@@ -9,64 +10,123 @@ import {
   getStoreData,
 } from '@/lib/db';
 import { verifyAdminSession } from '@/lib/auth';
-import { maskName } from '@/lib/utils';
-import { PublicQueueItem } from '@/types';
+import { maskName, getEstimatedWaitTime, formatQueueNo } from '@/lib/utils';
+import { Order, PublicQueueItem, QueueItem } from '@/types';
 import { dispatchShopNotification } from '@/lib/notifications';
+
+function buildVirtualQueueFromOrder(order: Order): QueueItem {
+  const trimmedNo = (order.order_no || '').trim().replace(/^#/, '');
+  const seqNo = /^\d+$/.test(trimmedNo) ? parseInt(trimmedNo, 10) : 0;
+  const itemsSummary = (order.items || []).map((i) => `${i.name} x${i.quantity}`).join(', ');
+  const isExpress = Boolean(order.is_express);
+
+  return {
+    id: `pending-${order.id}`,
+    queue_no: seqNo,
+    order_id: order.id,
+    order_no: order.order_no,
+    customer_name: order.customer_name,
+    items_summary: isExpress ? `⚡ [ลัดคิว] ${itemsSummary}` : itemsSummary,
+    contact_info: `${order.contact_channel}: ${order.contact_value}`,
+    contact_channel: order.contact_channel,
+    contact_value: order.contact_value,
+    status: order.status === 'cancelled' ? 'ยกเลิก' : 'รอตรวจสลิป',
+    is_express: isExpress,
+    estimated_time: getEstimatedWaitTime(order.items || [], isExpress),
+    shop_note:
+      order.status === 'pending_verification'
+        ? 'ได้รับสลิปการโอนเงินแล้ว กำลังรอแอดมินตรวจสอบและนำเข้าคิวค่ะ 🍎'
+        : 'รอแจ้งโอนเงินและแนบสลิปการโอนเงินค่ะ',
+    is_manual: false,
+    is_archived: false,
+    created_at: order.created_at,
+    updated_at: order.updated_at,
+  };
+}
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const orderNo = searchParams.get('order_no');
     const trackingToken = searchParams.get('tracking_token') || req.headers.get('x-tracking-token');
+    const isPublicBoardRequest = searchParams.get('public') === '1';
     const isAdmin = await verifyAdminSession(req);
 
-    // 1. Admin access: full queue details including contact info and private notes
-    if (isAdmin) {
-      if (orderNo) {
-        const queue = await getQueueByOrder(orderNo);
-        if (!queue) {
+    // 1. Specific order/queue lookup (by customer with tracking_token or by admin)
+    if (orderNo && (trackingToken || isAdmin)) {
+      const order = await getOrder(orderNo, isAdmin && !trackingToken ? undefined : trackingToken || undefined);
+      const queue = await getQueueByOrder(order ? order.order_no : orderNo);
+
+      if (queue) {
+        if (!isAdmin && order && queue.order_no !== order.order_no) {
+          // Ensure token belonged to this order
           return NextResponse.json(
-            { success: false, error: 'ยังไม่พบคิวสำหรับหมายเลขออเดอร์นี้' },
+            { success: false, error: 'ไม่พบข้อมูลคำสั่งซื้อ หรือรหัสติดตามไม่ถูกต้อง' },
             { status: 404 }
           );
         }
         return NextResponse.json({ success: true, queue });
       }
 
+      if (order) {
+        return NextResponse.json({
+          success: true,
+          queue: buildVirtualQueueFromOrder(order),
+        });
+      }
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'ไม่พบข้อมูลคำสั่งซื้อ หรือรหัสติดตามไม่ถูกต้อง',
+        },
+        { status: 404 }
+      );
+    }
+
+    // 2. Admin full queue list (when not explicitly requesting the public board)
+    if (isAdmin && !isPublicBoardRequest) {
       const queues = await getAllQueues();
       return NextResponse.json({ success: true, queues });
     }
 
-    // 2. Customer tracking access: requires order_no AND tracking_token
-    if (orderNo && trackingToken) {
-      const order = await getOrder(orderNo, trackingToken);
-      if (!order) {
-        return NextResponse.json(
-          { success: false, error: 'ไม่พบข้อมูลคำสั่งซื้อ หรือรหัสติดตามไม่ถูกต้อง' },
-          { status: 404 }
-        );
-      }
+    // 3. Public queue board access: sanitize personal data, include pending_verification orders as 'รอตรวจสลิป', and hide archived completed queues
+    const [allQueues, allOrders] = await Promise.all([getAllQueues(), getAllOrders()]);
+    const existingOrderNos = new Set(allQueues.map((q) => q.order_no));
 
-      const queue = await getQueueByOrder(orderNo);
-      if (!queue) {
-        return NextResponse.json(
-          { success: false, error: 'ยังไม่พบคิวสำหรับออเดอร์นี้ กรุณารอร้านค้ายืนยันการชำระเงิน' },
-          { status: 404 }
-        );
-      }
-      return NextResponse.json({ success: true, queue });
-    }
+    const activeQueues = allQueues.filter(
+      (q) => !q.is_archived && q.status !== 'ยกเลิก'
+    );
 
-    // 3. Public queue board access: sanitize all personal data (mask customer names, omit contact info & full order numbers)
-    const allQueues = await getAllQueues();
-    const sanitizedQueues: PublicQueueItem[] = allQueues.map((q) => ({
-      id: q.id,
-      queue_no: q.queue_no,
-      customer_name: maskName(q.customer_name),
-      status: q.status,
-      is_express: q.is_express,
-      estimated_time: q.estimated_time,
-    }));
+    const pendingSlipQueues: PublicQueueItem[] = allOrders
+      .filter(
+        (o) =>
+          o.status === 'pending_verification' &&
+          !existingOrderNos.has(o.order_no)
+      )
+      .map((o) => {
+        const vq = buildVirtualQueueFromOrder(o);
+        return {
+          id: vq.id,
+          queue_no: vq.queue_no,
+          customer_name: maskName(vq.customer_name),
+          status: 'รอตรวจสลิป',
+          is_express: vq.is_express,
+          estimated_time: vq.estimated_time,
+        };
+      });
+
+    const sanitizedQueues: PublicQueueItem[] = [
+      ...activeQueues.map((q) => ({
+        id: q.id,
+        queue_no: q.queue_no,
+        customer_name: maskName(q.customer_name),
+        status: q.status,
+        is_express: q.is_express,
+        estimated_time: q.estimated_time,
+      })),
+      ...pendingSlipQueues,
+    ].sort((a, b) => a.queue_no - b.queue_no);
 
     return NextResponse.json({ success: true, queues: sanitizedQueues });
   } catch (err: unknown) {
@@ -86,7 +146,16 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { action, queue_id, status, estimated_time, shop_note, is_express, manual_data } = body;
+    const {
+      action,
+      queue_id,
+      status,
+      estimated_time,
+      shop_note,
+      is_express,
+      is_archived,
+      manual_data,
+    } = body;
 
     if (action === 'add_manual' && manual_data) {
       const newQueue = await addManualQueue(manual_data);
@@ -94,13 +163,20 @@ export async function POST(req: Request) {
     }
 
     if (action === 'update_status' && queue_id && status) {
-      const updated = await updateQueueStatus(queue_id, status, estimated_time, shop_note, is_express);
+      const updated = await updateQueueStatus(
+        queue_id,
+        status,
+        estimated_time,
+        shop_note,
+        is_express,
+        is_archived
+      );
 
       // Notify Shop LINE / Webhook
       try {
         const storeData = await getStoreData();
         if (storeData?.settings?.notify_on_queue === true) {
-          const queueNotice = `✨ [${storeData?.settings?.shop_name || 'Auralune'}] อัปเดตสถานะคิวแล้ว\n━━━━━━━━━━━━━━━━━━━━\nคิวที่ #${updated.queue_no} (คุณ ${updated.customer_name})\n🔮 สถานะ: "${updated.status}"\n${updated.shop_note ? `📝 โน้ต: ${updated.shop_note}\n` : ''}⏱️ เวลา: ${updated.estimated_time || '-'}`;
+          const queueNotice = `✨ [${storeData?.settings?.shop_name || 'Auralune'}] อัปเดตสถานะคิวแล้ว\n━━━━━━━━━━━━━━━━━━━━\nคิวที่ #${formatQueueNo(updated.queue_no)} (คุณ ${updated.customer_name})\n🔮 สถานะ: "${updated.status}"\n${updated.shop_note ? `📝 โน้ต: ${updated.shop_note}\n` : ''}⏱️ เวลา: ${updated.estimated_time || '-'}`;
           dispatchShopNotification(queueNotice, storeData?.settings).catch((e) =>
             console.warn('Queue notification error:', e)
           );

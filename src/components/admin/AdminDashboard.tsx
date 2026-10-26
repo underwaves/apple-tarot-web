@@ -12,7 +12,7 @@ import {
   ThemeColors,
   StoreContact,
 } from '@/types';
-import { formatBaht, formatThaiDate, extractYouTubeId } from '@/lib/utils';
+import { formatBaht, formatThaiDate, extractYouTubeId, formatQueueNo } from '@/lib/utils';
 import { THEME_PRESETS, DEFAULT_THEME_COLORS, ThemePreset } from '@/lib/theme';
 import {
   X,
@@ -116,6 +116,7 @@ export default function AdminDashboard({
   const [isSavingReviews, setIsSavingReviews] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [queueFilter, setQueueFilter] = useState<'all' | 'express'>('all');
+  const [queueSubTab, setQueueSubTab] = useState<'working' | 'completed'>('working');
 
   // Customer queue notification modal state
   const [notifyQueueItem, setNotifyQueueItem] = useState<QueueItem | null>(null);
@@ -537,7 +538,8 @@ export default function AdminDashboard({
     status: string,
     estimatedTime?: string,
     shopNote?: string,
-    isExpress?: boolean
+    isExpress?: boolean,
+    isArchived?: boolean
   ) => {
     try {
       const res = await fetch('/api/queues', {
@@ -550,11 +552,18 @@ export default function AdminDashboard({
           estimated_time: estimatedTime,
           shop_note: shopNote,
           is_express: isExpress,
+          is_archived: isArchived,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        showFeedback('อัปเดตสถานะคิวสำเร็จ');
+        showFeedback(
+          isArchived === true
+            ? 'ย้ายรายการไปยังคิวเสร็จแล้วเรียบร้อยค่ะ ✓'
+            : isArchived === false
+            ? 'ดึงรายการกลับมาที่คิวงานที่กำลังทำแล้วค่ะ ✓'
+            : 'อัปเดตสถานะคิวสำเร็จ'
+        );
         loadAllData();
       }
     } catch {
@@ -646,10 +655,6 @@ export default function AdminDashboard({
       } else {
         showFeedback('คัดลอกข้อความแล้วค่ะ 📋');
       }
-    } else if (channel.includes('phone') || channel.includes('เบอร์') || channel.includes('tel')) {
-      const cleanPhone = val.replace(/[^0-9+]/g, '');
-      window.open(`sms:${cleanPhone}?body=${encodeURIComponent(text)}`, '_self');
-      showFeedback(`คัดลอกข้อความแล้ว! กำลังเปิด SMS ${cleanPhone} ค่ะ 📱`);
     } else {
       showFeedback('คัดลอกข้อความแล้วค่ะ 📋 นำไปส่งให้ลูกค้าได้เลย');
     }
@@ -1530,7 +1535,6 @@ export default function AdminDashboard({
             { label: '+ Instagram', type: 'Instagram' },
             { label: '+ Facebook', type: 'Facebook' },
             { label: '+ TikTok', type: 'TikTok' },
-            { label: '+ เบอร์โทรศัพท์', type: 'Phone' },
             { label: '+ X (Twitter)', type: 'X' },
           ].map((preset) => (
             <button
@@ -1728,7 +1732,11 @@ export default function AdminDashboard({
     .filter((o) => o.status === 'confirmed')
     .reduce((sum, o) => sum + o.total_amount, 0);
   const pendingSlipsCount = orders.filter((o) => o.status === 'pending_verification').length;
-  const activeQueuesCount = queues.filter((q) => q.status !== 'เสร็จแล้ว' && q.status !== 'ยกเลิก').length;
+  const activeQueuesCount = queues.filter(
+    (q) => !q.is_archived && q.status !== 'เสร็จแล้ว' && q.status !== 'ยกเลิก'
+  ).length;
+  const workingQueuesList = queues.filter((q) => !q.is_archived);
+  const completedQueuesList = queues.filter((q) => Boolean(q.is_archived));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-md animate-in fade-in duration-200">
@@ -1977,7 +1985,7 @@ export default function AdminDashboard({
                           >
                             <div>
                               <span className="font-mono font-bold text-[#D06D80]">
-                                {o.order_no}
+                                {formatQueueNo(o.order_no)}
                               </span>
                               <span className="text-[#543E30] ml-2 font-medium">
                                 {o.customer_name} ({formatBaht(o.total_amount)})
@@ -2047,7 +2055,7 @@ export default function AdminDashboard({
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F6B8C6]/30 pb-2 mb-2">
                           <div>
                             <span className="font-mono font-bold text-sm text-[#D06D80]">
-                              {o.order_no}
+                              {formatQueueNo(o.order_no)}
                             </span>
                             {o.is_express && (
                               <span className="ml-2 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF3C7] text-[#D97706] border border-[#FCD34D] shadow-xs">
@@ -2088,7 +2096,12 @@ export default function AdminDashboard({
                             {o.birth_date && (
                               <p>
                                 <strong className="text-[#543E30]">วันเกิด:</strong> {o.birth_date}
-                                {o.birth_time ? ` (เวลา ${o.birth_time})` : ''}
+                              </p>
+                            )}
+                            {(o.relationship_status || o.birth_time) && (
+                              <p>
+                                <strong className="text-[#543E30]">สถานะความรัก:</strong>{' '}
+                                {o.relationship_status || o.birth_time}
                               </p>
                             )}
                             {o.zodiac_sign && (
@@ -2203,9 +2216,14 @@ export default function AdminDashboard({
               {activeTab === 'queues' && (
                 <div className="space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <h4 className="font-serif text-lg font-bold text-[#D06D80]">
-                      จัดการคิวงาน ({queues.length})
-                    </h4>
+                    <div>
+                      <h4 className="font-serif text-lg font-bold text-[#D06D80]">
+                        จัดการคิวงาน ({queues.length})
+                      </h4>
+                      <p className="text-xs text-[#947765]">
+                        คิวที่ยังต้องทำจะอยู่ด้านบน เมื่อเปลี่ยนสถานะเป็น &quot;เสร็จสิ้น&quot; แล้วกดนำออก รายการจะย้ายไปอยู่หน้า &quot;คิวเสร็จแล้ว&quot;
+                      </p>
+                    </div>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
@@ -2232,150 +2250,286 @@ export default function AdminDashboard({
                     </div>
                   </div>
 
-                  {queues.length === 0 ? (
-                    <div className="py-16 text-center text-xs text-[#947765]">
-                      ยังไม่มีรายการคิว
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {(queueFilter === 'express' ? queues.filter((q) => q.is_express) : queues).map((q) => (
-                        <div
-                          key={q.id}
-                          className={`p-3.5 rounded-xl border space-y-2 text-xs shadow-sm transition ${
-                            q.is_express
-                              ? 'bg-[#FFFDF7] border-2 border-[#FCD34D]'
-                              : 'bg-[#FFFEFA] border border-[#FCE4EC]'
-                          }`}
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-[#D06D80]">
-                                คิว #{q.queue_no} · {q.customer_name} ({q.order_no})
-                              </span>
-                              {q.is_express && (
-                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF3C7] text-[#D97706] border border-[#FCD34D]">
-                                  ⚡ ลัดคิว
+                  {/* Queue Sub-tabs: Working vs Completed */}
+                  <div className="flex items-center gap-2 p-1.5 bg-[#FFF8EC] rounded-xl border border-[#F6B8C6]/50">
+                    <button
+                      type="button"
+                      onClick={() => setQueueSubTab('working')}
+                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        queueSubTab === 'working'
+                          ? 'bg-[#D06D80] text-white shadow-xs'
+                          : 'bg-transparent text-[#543E30] hover:bg-[#FCE4EC]/60'
+                      }`}
+                    >
+                      <span>📋 คิวงานที่กำลังทำ ({workingQueuesList.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQueueSubTab('completed')}
+                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        queueSubTab === 'completed'
+                          ? 'bg-[#2E7D32] text-white shadow-xs'
+                          : 'bg-transparent text-[#543E30] hover:bg-[#E8F5E9]'
+                      }`}
+                    >
+                      <span>✅ คิวเสร็จแล้ว ({completedQueuesList.length})</span>
+                    </button>
+                  </div>
+
+                  {(() => {
+                    const sourceList =
+                      queueSubTab === 'working'
+                        ? [...workingQueuesList].sort((a, b) => {
+                            // Keep active non-finished items above finished items that haven't been moved out yet
+                            const aDone = a.status === 'เสร็จแล้ว' ? 1 : 0;
+                            const bDone = b.status === 'เสร็จแล้ว' ? 1 : 0;
+                            if (aDone !== bDone) return aDone - bDone;
+                            return a.queue_no - b.queue_no;
+                          })
+                        : completedQueuesList;
+
+                    const filteredList =
+                      queueFilter === 'express'
+                        ? sourceList.filter((q) => q.is_express)
+                        : sourceList;
+
+                    if (filteredList.length === 0) {
+                      return (
+                        <div className="py-12 text-center text-xs text-[#947765] bg-[#FFFEFA] rounded-xl border border-[#FCE4EC]">
+                          {queueSubTab === 'working'
+                            ? 'ไม่มีรายการคิวงานที่กำลังทำในขณะนี้'
+                            : 'ยังไม่มีรายการในหน้าคิวเสร็จแล้ว'}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {filteredList.map((q) => (
+                          <div
+                            key={q.id}
+                            className={`p-3.5 rounded-xl border space-y-2.5 text-xs shadow-sm transition ${
+                              q.status === 'เสร็จแล้ว'
+                                ? 'bg-[#F4FBF4] border-2 border-[#A8B99A]'
+                                : q.is_express
+                                ? 'bg-[#FFFDF7] border-2 border-[#FCD34D]'
+                                : 'bg-[#FFFEFA] border border-[#FCE4EC]'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-sm text-[#D06D80]">
+                                  คิว #{formatQueueNo(q.queue_no)} · {q.customer_name} ({formatQueueNo(q.order_no)})
                                 </span>
-                              )}
-                            </div>
-                            <span className="text-xs text-[#947765]">
-                              {q.items_summary}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                            {/* Status Selector */}
-                            <div>
-                              <label className="text-[11px] text-[#543E30] block mb-1 font-medium">
-                                สถานะงาน
-                              </label>
-                              <select
-                                value={q.status}
-                                onChange={(e) =>
-                                  handleUpdateQueue(q.id, e.target.value, q.estimated_time, q.shop_note)
-                                }
-                                className="py-1 text-xs"
-                              >
-                                <option value="รอตรวจสลิป">รอตรวจสลิป</option>
-                                <option value="รอตรวจคิว">รอตรวจคิว</option>
-                                <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
-                                <option value="กำลังจัดส่ง">กำลังจัดส่ง</option>
-                                <option value="เสร็จแล้ว">เสร็จแล้ว</option>
-                                <option value="ยกเลิก">ยกเลิก</option>
-                              </select>
+                                {q.is_express && (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF3C7] text-[#D97706] border border-[#FCD34D]">
+                                    ⚡ ลัดคิว
+                                  </span>
+                                )}
+                                {q.status === 'เสร็จแล้ว' && (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F5E9] text-[#2E7D32] border border-[#A8B99A]">
+                                    ✓ เสร็จสิ้น
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-[#543E30] font-medium">
+                                {q.items_summary}
+                              </span>
                             </div>
 
-                            {/* Estimated Time */}
-                            <div>
-                              <label className="text-[11px] text-[#543E30] block mb-1 font-medium">
-                                เวลาประมาณ
-                              </label>
-                              <input
-                                type="text"
-                                defaultValue={q.estimated_time || ''}
-                                onBlur={(e) =>
-                                  handleUpdateQueue(q.id, q.status, e.target.value, q.shop_note)
-                                }
-                                placeholder="เช่น 1-2 วัน หรือ 28 ต.ค."
-                                className="py-1 text-xs"
-                              />
-                            </div>
-
-                            {/* Shop Note */}
-                            <div>
-                              <label className="text-[11px] text-[#543E30] block mb-1 font-medium">
-                                โน้ตถึงลูกค้า
-                              </label>
-                              <input
-                                type="text"
-                                defaultValue={q.shop_note || ''}
-                                onBlur={(e) =>
-                                  handleUpdateQueue(q.id, q.status, q.estimated_time, e.target.value)
-                                }
-                                placeholder="เช่น กำลังลงสีแอปเปิ้ล"
-                                className="py-1 text-xs"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Customer Contact & Direct Notification Bar */}
-                          {(() => {
-                            const relOrder = orders.find((o) => o.order_no === q.order_no);
-                            const ch = q.contact_channel || relOrder?.contact_channel;
-                            const val = q.contact_value || relOrder?.contact_value;
-                            return (
-                              <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-[#FFF8EC]/80 border border-[#F6B8C6]/40">
-                                <div className="flex items-center gap-1.5 text-[11px] text-[#543E30]">
-                                  <span className="font-semibold text-[#D06D80]">📱 ข้อมูลติดต่อ:</span>
-                                  <span className="font-medium">{ch || 'ช่องทาง'}:</span>
-                                  <span className="font-bold text-[#D06D80]">{val || q.contact_info || '-'}</span>
-                                </div>
+                            {/* Prominent action when status is changed to เสร็จสิ้น (เสร็จแล้ว) in working queue */}
+                            {!q.is_archived && q.status === 'เสร็จแล้ว' && (
+                              <div className="p-2.5 rounded-xl bg-[#E8F5E9] border border-[#A8B99A] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <p className="text-xs text-[#2E7D32] font-semibold">
+                                  ✨ รายการนี้เปลี่ยนสถานะเป็น &quot;เสร็จสิ้น&quot; แล้ว กดปุ่มเพื่อนำออกจากคิวงานที่กำลังทำ
+                                </p>
                                 <button
                                   type="button"
-                                  onClick={() => handleOpenNotifyModal(q)}
-                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-gradient-to-r from-[#F6B8C6] to-[#FCE4EC] hover:brightness-95 text-[#543E30] border border-[#F6B8C6] flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
-                                  title="ส่งข้อความอัปเดตสถานะคิวให้ลูกค้า"
+                                  onClick={() =>
+                                    handleUpdateQueue(
+                                      q.id,
+                                      'เสร็จแล้ว',
+                                      q.estimated_time,
+                                      q.shop_note,
+                                      q.is_express,
+                                      true
+                                    )
+                                  }
+                                  className="px-3.5 py-2 rounded-lg text-xs font-bold bg-[#2E7D32] hover:bg-[#1B5E20] text-white flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shrink-0"
                                 >
-                                  <Send className="w-3 h-3 text-[#D06D80]" />
-                                  <span>แจ้งเตือนคิวลูกค้า 💬</span>
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  <span>นำออกจากคิวงานที่กำลังทำ (ย้ายไปคิวเสร็จแล้ว)</span>
                                 </button>
                               </div>
-                            );
-                          })()}
+                            )}
 
-                          <div className="flex items-center justify-between pt-1 border-t border-[#FCE4EC]/50">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateQueue(
-                                  q.id,
-                                  q.status,
-                                  q.estimated_time,
-                                  q.shop_note,
-                                  !q.is_express
-                                )
-                              }
-                              className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold border transition cursor-pointer flex items-center gap-1 ${
-                                q.is_express
-                                  ? 'bg-[#FEF3C7] text-[#D97706] border-[#FCD34D] hover:bg-[#FDE68A]'
-                                  : 'bg-[#FFF8EC] text-[#947765] border-[#FCE4EC] hover:border-[#F6B8C6]'
-                              }`}
-                            >
-                              <span>⚡ {q.is_express ? 'ยกเลิกลัดคิว' : 'ตั้งเป็นลัดคิว'}</span>
-                            </button>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                              {/* Status Selector */}
+                              <div>
+                                <label className="text-[11px] text-[#543E30] block mb-1 font-medium">
+                                  สถานะงาน
+                                </label>
+                                <select
+                                  value={q.status}
+                                  onChange={(e) => {
+                                    const nextStatus = e.target.value;
+                                    handleUpdateQueue(
+                                      q.id,
+                                      nextStatus,
+                                      q.estimated_time,
+                                      q.shop_note,
+                                      q.is_express,
+                                      nextStatus === 'เสร็จแล้ว' ? q.is_archived : false
+                                    );
+                                  }}
+                                  className="py-1 text-xs"
+                                >
+                                  <option value="รอตรวจสลิป">รอตรวจสลิป</option>
+                                  <option value="รอตรวจคิว">รอตรวจคิว</option>
+                                  <option value="กำลังดูดวง">กำลังดูดวง</option>
+                                  <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                                  <option value="ส่งคำทำนายแล้ว">ส่งคำทำนายแล้ว</option>
+                                  <option value="กำลังจัดส่ง">กำลังจัดส่ง</option>
+                                  <option value="เสร็จแล้ว">เสร็จสิ้น (เสร็จแล้ว)</option>
+                                  <option value="ยกเลิก">ยกเลิก</option>
+                                </select>
+                              </div>
 
-                            <button
-                              onClick={() => handleDeleteQueue(q.id)}
-                              className="text-[11px] text-[#D06D80] hover:underline flex items-center gap-1 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>ลบคิว</span>
-                            </button>
+                              {/* Estimated Time */}
+                              <div>
+                                <label className="text-[11px] text-[#543E30] block mb-1 font-medium">
+                                  เวลาประมาณ
+                                </label>
+                                <input
+                                  type="text"
+                                  defaultValue={q.estimated_time || ''}
+                                  onBlur={(e) =>
+                                    handleUpdateQueue(
+                                      q.id,
+                                      q.status,
+                                      e.target.value,
+                                      q.shop_note,
+                                      q.is_express,
+                                      q.is_archived
+                                    )
+                                  }
+                                  placeholder="เช่น 3 - 24 ชม. (ส่วนมากเร็วกว่านั้น)"
+                                  className="py-1 text-xs"
+                                />
+                              </div>
+
+                              {/* Shop Note */}
+                              <div>
+                                <label className="text-[11px] text-[#543E30] block mb-1 font-medium">
+                                  โน้ตถึงลูกค้า
+                                </label>
+                                <input
+                                  type="text"
+                                  defaultValue={q.shop_note || ''}
+                                  onBlur={(e) =>
+                                    handleUpdateQueue(
+                                      q.id,
+                                      q.status,
+                                      q.estimated_time,
+                                      e.target.value,
+                                      q.is_express,
+                                      q.is_archived
+                                    )
+                                  }
+                                  placeholder="เช่น กำลังเปิดไพ่ให้ค่ะ"
+                                  className="py-1 text-xs"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Customer Contact & Direct Notification Bar */}
+                            {(() => {
+                              const relOrder = orders.find(
+                                (o) => formatQueueNo(o.order_no) === formatQueueNo(q.order_no) || o.order_no === q.order_no
+                              );
+                              const ch = q.contact_channel || relOrder?.contact_channel;
+                              const val = q.contact_value || relOrder?.contact_value;
+                              return (
+                                <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-[#FFF8EC]/80 border border-[#F6B8C6]/40">
+                                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[#543E30]">
+                                    <span className="font-semibold text-[#D06D80]">📱 ข้อมูลติดต่อ:</span>
+                                    <span className="font-medium">{ch || 'ช่องทาง'}:</span>
+                                    <span className="font-bold text-[#D06D80]">{val || q.contact_info || '-'}</span>
+                                    {relOrder?.question && (
+                                      <span className="text-[#947765] ml-1">
+                                        · คำถาม: <strong className="text-[#543E30]">{relOrder.question}</strong>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenNotifyModal(q)}
+                                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-gradient-to-r from-[#F6B8C6] to-[#FCE4EC] hover:brightness-95 text-[#543E30] border border-[#F6B8C6] flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                                    title="ส่งข้อความอัปเดตสถานะคิวให้ลูกค้า"
+                                  >
+                                    <Send className="w-3 h-3 text-[#D06D80]" />
+                                    <span>แจ้งเตือนคิวลูกค้า 💬</span>
+                                  </button>
+                                </div>
+                              );
+                            })()}
+
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#FCE4EC]/50">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleUpdateQueue(
+                                      q.id,
+                                      q.status,
+                                      q.estimated_time,
+                                      q.shop_note,
+                                      !q.is_express,
+                                      q.is_archived
+                                    )
+                                  }
+                                  className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold border transition cursor-pointer flex items-center gap-1 ${
+                                    q.is_express
+                                      ? 'bg-[#FEF3C7] text-[#D97706] border-[#FCD34D] hover:bg-[#FDE68A]'
+                                      : 'bg-[#FFF8EC] text-[#947765] border-[#FCE4EC] hover:border-[#F6B8C6]'
+                                  }`}
+                                >
+                                  <span>⚡ {q.is_express ? 'ยกเลิกลัดคิว' : 'ตั้งเป็นลัดคิว'}</span>
+                                </button>
+
+                                {q.is_archived && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateQueue(
+                                        q.id,
+                                        q.status,
+                                        q.estimated_time,
+                                        q.shop_note,
+                                        q.is_express,
+                                        false
+                                      )
+                                    }
+                                    className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold border border-[#A8B99A] bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] transition cursor-pointer"
+                                  >
+                                    ↩️ ย้ายกลับไปคิวงานที่กำลังทำ
+                                  </button>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={() => handleDeleteQueue(q.id)}
+                                className="text-[11px] text-[#D06D80] hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>ลบคิว</span>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 

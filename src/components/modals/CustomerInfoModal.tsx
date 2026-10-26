@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, ArrowLeft, ArrowRight, Loader2, Sparkles, MapPin } from 'lucide-react';
+import { X, ArrowLeft, ArrowRight, Loader2, Sparkles, MapPin, Clock } from 'lucide-react';
 import { PackageItem, OrderType, StoreSettings } from '@/types';
+import { getEstimatedWaitTime } from '@/lib/utils';
+
+const RELATIONSHIP_STATUS_OPTIONS = ['โสด', 'มีแฟน', 'มีคนคุย'] as const;
 
 interface CartEntry {
   pkg: PackageItem;
@@ -20,6 +23,7 @@ interface CustomerInfoModalProps {
     order_type: OrderType;
     birth_date?: string;
     birth_time?: string;
+    relationship_status?: string;
     zodiac_sign?: string;
     question?: string;
     shipping_name?: string;
@@ -65,7 +69,7 @@ export default function CustomerInfoModal({
   // Common
   const [name, setName] = useState('');
   const [customerNote, setCustomerNote] = useState('');
-  const [contactChannel, setContactChannel] = useState<'LINE' | 'Instagram' | 'Facebook' | 'Phone'>('LINE');
+  const [contactChannel, setContactChannel] = useState<'LINE' | 'Instagram' | 'Facebook'>('LINE');
   const [contactValue, setContactValue] = useState('');
   const [isExpress, setIsExpress] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -74,7 +78,7 @@ export default function CustomerInfoModal({
 
   // Fortune
   const [birthDate, setBirthDate] = useState('');
-  const [birthTime, setBirthTime] = useState('');
+  const [relationshipStatus, setRelationshipStatus] = useState<string>('');
   const [zodiacSign, setZodiacSign] = useState('');
   const [question, setQuestion] = useState('');
 
@@ -103,7 +107,11 @@ export default function CustomerInfoModal({
   const effectiveIsExpress = isExpress || hasExpressPkg;
   const EXPRESS_FLAT_RATE = 32;
 
-  const expressEstimatedTime = settings?.express_estimated_time || '⚡ ภายใน 12-24 ชั่วโมง';
+  const currentWaitTime = getEstimatedWaitTime(
+    cartItems.map((it) => it.pkg),
+    effectiveIsExpress
+  );
+  const expressEstimatedTime = '1 - 3 ชม. (ส่วนมากเร็วกว่านั้น)';
   const fortuneItems = cartItems.filter((it) => it.pkg.product_type !== 'physical');
   const cartSubtotal = cartItems.reduce((acc, it) => acc + it.pkg.price * it.quantity, 0);
 
@@ -159,7 +167,8 @@ export default function CustomerInfoModal({
       customer_name: name.trim(),
       order_type: orderType,
       birth_date: hasFortune ? birthDate.trim() || undefined : undefined,
-      birth_time: hasFortune ? birthTime.trim() || undefined : undefined,
+      birth_time: hasFortune ? relationshipStatus.trim() || undefined : undefined,
+      relationship_status: hasFortune ? relationshipStatus.trim() || undefined : undefined,
       zodiac_sign: hasFortune && zodiacSign && !zodiacSign.includes('เลือก') ? zodiacSign : undefined,
       question: hasFortune ? question.trim() || undefined : undefined,
       shipping_name: hasPhysical ? (shippingName.trim() || name.trim()) : undefined,
@@ -238,12 +247,18 @@ export default function CustomerInfoModal({
           {/* SECTION: FORTUNE TELLING (Only if order contains fortune products) */}
           {hasFortune && (
             <div className="bg-[#FFFEFA] border border-[#F6B8C6]/60 rounded-2xl p-3.5 space-y-3 shadow-xs">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[#D06D80]">
-                <Sparkles className="w-3.5 h-3.5 text-[#F6B8C6]" />
-                <span>ข้อมูลสำหรับคำทำนาย</span>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#D06D80]">
+                  <Sparkles className="w-3.5 h-3.5 text-[#F6B8C6]" />
+                  <span>ข้อมูลสำหรับคำทำนาย</span>
+                </div>
+                <div className="inline-flex items-center gap-1 bg-[#FFF8EC] border border-[#F6D1B5] px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-[#543E30]">
+                  <Clock className="w-3 h-3 text-[#D06D80]" />
+                  <span>เวลารอรับบริการ: <strong className="text-[#D06D80]">{currentWaitTime}</strong></span>
+                </div>
               </div>
 
-              {/* Birth Date & Time */}
+              {/* Birth Date & Relationship Status */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[11px] font-medium text-[#947765] mb-1">
@@ -257,13 +272,19 @@ export default function CustomerInfoModal({
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-[#947765] mb-1">
-                    เวลาเกิด (ถ้าทราบ)
+                    สถานะความรัก
                   </label>
-                  <input
-                    type="time"
-                    value={birthTime}
-                    onChange={(e) => setBirthTime(e.target.value)}
-                  />
+                  <select
+                    value={relationshipStatus}
+                    onChange={(e) => setRelationshipStatus(e.target.value)}
+                  >
+                    <option value="">เลือกสถานะความรัก</option>
+                    {RELATIONSHIP_STATUS_OPTIONS.map((statusOpt) => (
+                      <option key={statusOpt} value={statusOpt}>
+                        {statusOpt}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -291,11 +312,22 @@ export default function CustomerInfoModal({
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="เช่น เรื่องความรักกับคนคุยปัจจุบัน / เรื่องงานที่สัมภาษณ์ไป"
+                  placeholder="พิมพ์คำถามที่ต้องการดูดวงที่นี่..."
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   required={hasFortune}
                 />
+                <div className="mt-2 p-2.5 rounded-xl bg-[#FFF8EC] border border-[#F6B8C6]/80 text-xs text-[#543E30] leading-relaxed">
+                  <p>ถ้ามีมากกว่า 1 คำถามให้แจ้งชื่อรายการด้วย /</p>
+                  <p>ถามถึงบุคคลอื่นแจ้งชื่อด้วยค่ะ</p>
+                  <p className="mt-0.5">เช่น</p>
+                  <p>
+                    1. <u className="underline decoration-[#D06D80] decoration-2 underline-offset-2 font-semibold">ทั่วไป</u> ความรักเดือนหน้าจะเป็นยังไง
+                  </p>
+                  <p>
+                    2. <u className="underline decoration-[#D06D80] decoration-2 underline-offset-2 font-semibold">เจาะจง</u> พี่<u className="underline decoration-[#D06D80] decoration-2 underline-offset-2 font-semibold">จ้อย</u>ชอบเราจริงไหม
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -395,8 +427,8 @@ export default function CustomerInfoModal({
             <label className="block text-xs font-semibold text-[#543E30] mb-1.5">
               ช่องทางติดต่อหลัก *
             </label>
-            <div className="grid grid-cols-4 gap-1.5 mb-2">
-              {(['LINE', 'Instagram', 'Facebook', 'Phone'] as const).map((ch) => (
+            <div className="grid grid-cols-3 gap-1.5 mb-2">
+              {(['LINE', 'Instagram', 'Facebook'] as const).map((ch) => (
                 <button
                   key={ch}
                   type="button"
@@ -407,7 +439,7 @@ export default function CustomerInfoModal({
                       : 'bg-[#F4F8F0] text-[#7D946D] border-[#C9DDB8] hover:bg-[#E8F0E2]'
                   }`}
                 >
-                  {ch === 'Phone' ? 'เบอร์โทร' : ch}
+                  {ch}
                 </button>
               ))}
             </div>
@@ -419,14 +451,23 @@ export default function CustomerInfoModal({
                   ? 'ใส่ LINE ID เพื่อรับข้อมูลหรือแจ้งสถานะ'
                   : contactChannel === 'Instagram'
                   ? 'ใส่ IG Handle เช่น @my.ig'
-                  : contactChannel === 'Facebook'
-                  ? 'ใส่ชื่อโปรไฟล์ Facebook'
-                  : 'ใส่เบอร์โทรศัพท์ 10 หลัก'
+                  : 'ใส่ชื่อโปรไฟล์ Facebook'
               }
               value={contactValue}
               onChange={(e) => setContactValue(e.target.value)}
               required
             />
+          </div>
+
+          {/* Estimated Wait Time Summary Banner */}
+          <div className="p-3 rounded-2xl bg-[#FFFEFA] border border-[#F6B8C6]/80 flex items-center justify-between gap-2 text-xs shadow-xs">
+            <span className="text-[#543E30] font-semibold flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-[#D06D80] shrink-0" />
+              <span>เวลารอรับบริการ:</span>
+            </span>
+            <span className="font-bold text-[#D06D80] text-right">
+              {currentWaitTime}
+            </span>
           </div>
 
           {/* Express Queue Option */}

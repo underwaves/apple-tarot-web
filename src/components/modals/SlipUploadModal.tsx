@@ -113,7 +113,7 @@ export default function SlipUploadModal({
         <div className="w-10 h-1 bg-[#F6B8C6]/60 rounded-full mx-auto mb-2 sm:hidden" />
 
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#FCE4EC]">
+        <div className="flex items-center justify-between pb-3 border-b border-[#F6B8C6]">
           <div className="flex items-center gap-2">
             <span className="text-xl">🧾</span>
             <h3 className="font-serif text-2xl font-bold text-[#D06D80]">
@@ -122,7 +122,7 @@ export default function SlipUploadModal({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#FCE4EC] flex items-center justify-center text-[#543E30] hover:bg-[#F6B8C6] transition cursor-pointer"
+            className="w-8 h-8 rounded-full bg-[#FCE4EC] border border-[#F6B8C6] flex items-center justify-center text-[#543E30] hover:bg-[#F6B8C6] transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -131,7 +131,7 @@ export default function SlipUploadModal({
         {/* Content */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-3 space-y-4">
           {errorMsg && (
-            <div className="p-3 bg-[#FCE4EC] border border-[#F6B8C6] text-[#D06D80] rounded-xl text-xs font-semibold">
+            <div className="p-3 bg-[#FCE4EC] border-2 border-[#D06D80] text-[#543E30] rounded-xl text-xs font-bold">
               ⚠️ {errorMsg}
             </div>
           )}
@@ -150,15 +150,15 @@ export default function SlipUploadModal({
             onClick={() => fileInputRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-3xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center min-h-[220px] ${
+            className={`border-2 border-dashed rounded-3xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center min-h-[220px] shadow-xs ${
               previewUrl
-                ? 'border-[#A8B99A] bg-[#FFFEFA]'
-                : 'border-[#C9DDB8] hover:border-[#F6B8C6] bg-[#FFFEFA]'
+                ? 'border-[#7D946D] bg-[#FFFEFA]'
+                : 'border-[#D06D80]/80 hover:border-[#D06D80] bg-[#FFFEFA]'
             }`}
           >
             {previewUrl ? (
               <div className="flex flex-col items-center gap-3">
-                <div className="max-h-56 max-w-[240px] rounded-2xl overflow-hidden border border-[#C9DDB8] shadow-sm">
+                <div className="max-h-56 max-w-[240px] rounded-2xl overflow-hidden border-2 border-[#A8B99A] shadow-sm">
                   <Image
                     src={previewUrl}
                     alt="Slip Preview"
@@ -168,43 +168,43 @@ export default function SlipUploadModal({
                     className="w-full h-auto object-contain max-h-56"
                   />
                 </div>
-                <span className="text-xs text-[#D06D80] underline font-medium">
+                <span className="text-xs text-[#543E30] bg-[#FCE4EC] border border-[#E88E9F] px-3.5 py-1.5 rounded-full font-bold shadow-2xs">
                   แตะเพื่อเปลี่ยนรูปสลิป
                 </span>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3">
-                <div className="w-14 h-14 rounded-full bg-[#FCE4EC] flex items-center justify-center text-[#D06D80] shadow-xs">
+                <div className="w-14 h-14 rounded-full bg-[#FCE4EC] border-2 border-[#F6B8C6] flex items-center justify-center text-[#D06D80] shadow-xs">
                   <UploadCloud className="w-7 h-7" />
                 </div>
                 <div>
-                  <span className="text-sm font-semibold text-[#543E30] block">
+                  <span className="inline-block text-sm font-bold text-[#543E30] bg-[#FCE4EC] border border-[#E88E9F] px-4 py-1.5 rounded-full shadow-2xs">
                     แตะเพื่อเลือกรูปสลิป
                   </span>
-                  <span className="text-xs text-[#947765] mt-0.5 block">
+                  <span className="text-xs font-medium text-[#543E30] mt-2 block">
                     หรือลากไฟล์ภาพสลิปมาวางตรงนี้
                   </span>
                 </div>
-                <div className="inline-flex items-center gap-1.5 text-[11px] text-[#7D946D] bg-[#F4F8F0] border border-[#C9DDB8] px-3 py-1 rounded-full font-medium">
-                  <ImageIcon className="w-3.5 h-3.5" />
-                  <span>JPG, PNG, WEBP (สูงสุด 5MB)</span>
+                <div className="inline-flex items-center gap-1.5 text-xs text-[#543E30] bg-[#F4F8F0] border border-[#A8B99A] px-3 py-1 rounded-full font-semibold">
+                  <ImageIcon className="w-3.5 h-3.5 text-[#7D946D]" />
+                  <span>รองรับ JPG, PNG, WEBP</span>
                 </div>
               </div>
             )}
           </div>
 
           {/* Info note */}
-          <p className="text-xs text-[#d8c3b0]/80 text-center leading-relaxed">
+          <div className="p-3 rounded-xl bg-[#FFFEFA] border border-[#F6B8C6] text-xs text-[#543E30] font-medium text-center leading-relaxed shadow-2xs">
             เมื่อส่งสลิปแล้ว เจ้าของร้านจะทำการตรวจสอบและนำคำสั่งซื้อของคุณเข้าคิวทันทีค่ะ
-          </p>
+          </div>
 
           {/* Action Buttons */}
-          <div className="border-t border-[#95d5b2]/30 pt-3 flex items-center gap-3">
+          <div className="border-t border-[#F6B8C6] pt-3 flex items-center gap-3">
             <button
               type="button"
               onClick={onBack}
               disabled={isUploading}
-              className="secondary-btn flex-1 py-3 px-4 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer"
+              className="secondary-btn flex-1 py-3 px-4 flex items-center justify-center gap-2 text-xs font-bold text-[#543E30]! border-2 border-[#A8B99A]! cursor-pointer shadow-xs"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>กลับไปหน้า QR</span>
@@ -213,7 +213,7 @@ export default function SlipUploadModal({
             <button
               type="submit"
               disabled={isUploading}
-              className="cta-btn flex-1 py-3 px-4 flex items-center justify-center gap-2 text-xs font-semibold text-white cursor-pointer"
+              className="cta-btn flex-1 py-3 px-4 flex items-center justify-center gap-2 text-xs font-bold text-[#543E30]! border-2 border-[#D06D80]/60 shadow-md cursor-pointer"
             >
               {isUploading ? (
                 <>

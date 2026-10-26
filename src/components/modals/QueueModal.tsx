@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { QueueItem, PublicQueueItem } from '@/types';
-import { maskName } from '@/lib/utils';
+import { maskName, formatQueueNo } from '@/lib/utils';
 import { X, Search, Clock, RefreshCw, CheckCircle, AlertCircle, Sparkles, Key } from 'lucide-react';
 
 interface QueueModalProps {
@@ -47,10 +47,22 @@ export default function QueueModal({
   const refreshQueues = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/queues');
+      const res = await fetch('/api/queues?public=1');
       const data = await res.json();
       if (data.success) {
         setPublicQueues(data.queues || []);
+      }
+      if (searchOrderNo.trim() && searchTrackingToken.trim()) {
+        const trackRes = await fetch(
+          `/api/queues?order_no=${encodeURIComponent(searchOrderNo.trim())}&tracking_token=${encodeURIComponent(
+            searchTrackingToken.trim()
+          )}`
+        );
+        const trackData = await trackRes.json();
+        if (trackData.success && trackData.queue) {
+          setPersonalQueue(trackData.queue);
+          setSearchError('');
+        }
       }
     } catch (err: unknown) {
       console.error('Failed to fetch queues', err);
@@ -63,12 +75,48 @@ export default function QueueModal({
     if (!isOpen) return;
 
     let ignore = false;
+    let storedOrderNo = initialOrderNo;
+    let storedToken = '';
+    if (typeof window !== 'undefined') {
+      try {
+        if (!storedOrderNo) {
+          storedOrderNo = sessionStorage.getItem('apple_last_order_no') || '';
+        }
+        storedToken = sessionStorage.getItem('apple_last_tracking_token') || '';
+      } catch {
+        // ignore
+      }
+    }
+
+    const effectiveOrderNo = searchOrderNo.trim() || storedOrderNo.trim();
+    const effectiveToken = searchTrackingToken.trim() || storedToken.trim();
+
+    if (!searchOrderNo.trim() && storedOrderNo) {
+      setSearchOrderNo(storedOrderNo);
+    }
+    if (!searchTrackingToken.trim() && storedToken) {
+      setSearchTrackingToken(storedToken);
+    }
+
     async function load() {
       try {
-        const res = await fetch('/api/queues');
+        const res = await fetch('/api/queues?public=1');
         const data = await res.json();
         if (!ignore && data.success) {
           setPublicQueues(data.queues || []);
+        }
+
+        if (effectiveOrderNo && effectiveToken) {
+          const trackRes = await fetch(
+            `/api/queues?order_no=${encodeURIComponent(effectiveOrderNo)}&tracking_token=${encodeURIComponent(
+              effectiveToken
+            )}`
+          );
+          const trackData = await trackRes.json();
+          if (!ignore && trackData.success && trackData.queue) {
+            setPersonalQueue(trackData.queue);
+            setSearchError('');
+          }
         }
       } catch (err: unknown) {
         console.error('Failed to fetch queues', err);
@@ -79,7 +127,7 @@ export default function QueueModal({
     return () => {
       ignore = true;
     };
-  }, [isOpen]);
+  }, [isOpen, initialOrderNo]);
 
   const handleTrackOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,7 +234,7 @@ export default function QueueModal({
               <Search className="w-4 h-4 absolute left-3 top-3 text-[#A8B99A]" />
               <input
                 type="text"
-                placeholder="หมายเลขออเดอร์ (APL-...)"
+                placeholder="เลขบิลคำสั่งซื้อ (เช่น 00001)"
                 value={searchOrderNo}
                 onChange={(e) => setSearchOrderNo(e.target.value)}
                 className="pl-9 text-xs"
@@ -196,7 +244,7 @@ export default function QueueModal({
               <Key className="w-4 h-4 absolute left-3 top-3 text-[#A8B99A]" />
               <input
                 type="text"
-                placeholder="รหัสติดตาม (trk_...)"
+                placeholder="รหัสติดตามสถานะ"
                 value={searchTrackingToken}
                 onChange={(e) => setSearchTrackingToken(e.target.value)}
                 className="pl-9 text-xs font-mono"
@@ -209,7 +257,7 @@ export default function QueueModal({
               <span className="text-[11px] text-[#D06D80] font-medium">⚠️ {searchError}</span>
             ) : (
               <span className="text-[10px] text-[#947765]">
-                * ใส่รหัสติดตามเพื่อดูข้อมูลออเดอร์ของท่านแบบปลอดภัย
+                * ใส่เลขบิลคำสั่งซื้อและรหัสติดตามเพื่อดูสถานะคิวของท่าน
               </span>
             )}
             <button
@@ -231,7 +279,7 @@ export default function QueueModal({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-serif font-bold text-lg text-[#D06D80]">
-                      คิวของคุณ: #{personalQueue.queue_no}
+                      คิวของคุณ: #{formatQueueNo(personalQueue.queue_no || personalQueue.order_no)}
                     </span>
                     {personalQueue.is_express && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FEF3C7] border border-[#FCD34D] text-[10px] font-bold text-[#D97706] shadow-xs animate-pulse">
@@ -240,12 +288,12 @@ export default function QueueModal({
                     )}
                   </div>
                   <span className="text-[11px] text-[#947765] block font-mono">
-                    ออเดอร์: {personalQueue.order_no} ({personalQueue.customer_name})
+                    บิลคำสั่งซื้อ: {formatQueueNo(personalQueue.order_no)} ({personalQueue.customer_name})
                   </span>
                 </div>
               </div>
               <div
-                className={`flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border ${
+                className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border ${
                   getStatusBadge(personalQueue.status).bg
                 }`}
               >
@@ -311,13 +359,13 @@ export default function QueueModal({
                 >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center font-serif font-bold text-sm border ${
+                      className={`px-2.5 h-8 rounded-full flex items-center justify-center font-mono font-bold text-xs border ${
                         item.is_express
                           ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#B45309]'
                           : 'bg-[#FFF8EC] border-[#C9DDB8] text-[#D06D80]'
                       }`}
                     >
-                      #{item.queue_no}
+                      #{formatQueueNo(item.queue_no)}
                     </div>
                     <div>
                       <div className="text-xs font-semibold text-[#543E30] flex items-center gap-1.5">

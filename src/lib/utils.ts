@@ -32,7 +32,10 @@ export function formatThaiDate(dateString: string): string {
   }
 }
 
-export function generateOrderNo(): string {
+export function generateOrderNo(seqNo?: number): string {
+  if (typeof seqNo === 'number' && seqNo > 0) {
+    return String(seqNo).padStart(5, '0');
+  }
   const date = new Date();
   const yearShort = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -42,8 +45,58 @@ export function generateOrderNo(): string {
 }
 
 export function generateTrackingToken(): string {
-  // Unguessable, cryptographically secure 24-character token
-  return `trk_${crypto.randomBytes(12).toString('hex')}`;
+  // Unguessable, cryptographically secure 8-digit random numeric token
+  const n = crypto.randomInt(10000000, 100000000);
+  return String(n);
+}
+
+export function formatQueueNo(no: number | string | undefined | null): string {
+  if (no === undefined || no === null || no === '') return '-----';
+  const parsed = typeof no === 'number' ? no : parseInt(String(no).replace(/^#/, ''), 10);
+  if (!isNaN(parsed) && parsed > 0) {
+    return String(parsed).padStart(5, '0');
+  }
+  return String(no);
+}
+
+export function getEstimatedWaitTime(
+  items: { id?: string; name?: string; category_id?: string; product_type?: string }[],
+  isExpress?: boolean
+): string {
+  const hasVoiceCall = items.some((i) => {
+    const id = (i.id || '').toLowerCase();
+    const name = i.name || '';
+    const cat = (i.category_id || '').toLowerCase();
+    return (
+      cat === 'cat-2' ||
+      id === 'pkg-4' ||
+      id === 'pkg-5' ||
+      id === 'pkg-6' ||
+      name.includes('นาที') ||
+      name.includes('น݁า݂ที') ||
+      name.includes('โทร') ||
+      name.includes('คุยสด')
+    );
+  });
+
+  if (hasVoiceCall) {
+    return '10 - 30 นาที (แม่หมอจะทักไปนัดเวลา)';
+  }
+
+  const hasExpressItem =
+    Boolean(isExpress) ||
+    items.some((i) => (i.id || '') === 'pkg-3' || (i.name || '').includes('ลัดคิว'));
+
+  if (hasExpressItem) {
+    return '1 - 3 ชม. (ส่วนมากเร็วกว่านั้น)';
+  }
+
+  const hasFortune = items.some((i) => i.product_type !== 'physical');
+  if (hasFortune) {
+    return '3 - 24 ชม. (ส่วนมากเร็วกว่านั้น)';
+  }
+
+  return '3 - 24 ชม. (ส่วนมากเร็วกว่านั้น)';
 }
 
 export function maskName(name: string): string {
@@ -68,6 +121,7 @@ export function formatBillText(order: {
   order_type?: string;
   birth_date?: string;
   birth_time?: string;
+  relationship_status?: string;
   zodiac_sign?: string;
   question?: string;
   shipping_name?: string;
@@ -95,10 +149,12 @@ export function formatBillText(order: {
     .map((item) => `- ${item.name} (${item.quantity} รายการ): ฿${(item.price * item.quantity).toLocaleString()}`)
     .join('\n');
 
+  const waitTime = getEstimatedWaitTime(order.items, order.is_express);
+
   const lines = [
     `🍎 บิลคำสั่งซื้อ: ${order.order_no}`,
     order.tracking_token ? `🔑 รหัสติดตามสถานะ (ห้ามแชร์): ${order.tracking_token}` : '',
-    order.queue_no ? `🏷️ คิวที่: #${order.queue_no}` : '',
+    order.queue_no ? `🏷️ คิวที่: #${formatQueueNo(order.queue_no)}` : '',
     `👤 ชื่อลูกค้า: ${order.customer_name}`,
   ];
 
@@ -120,10 +176,15 @@ export function formatBillText(order: {
     );
   }
 
-  if (order.birth_date || order.question) {
+  if (order.birth_date || order.relationship_status || order.birth_time || order.zodiac_sign || order.question) {
     if (order.birth_date) {
       lines.push(
-        `🎂 วันเกิด: ${order.birth_date}${order.birth_time ? ` (เวลา ${order.birth_time})` : ''}`
+        `🎂 วันเกิด: ${order.birth_date}`
+      );
+    }
+    if (order.relationship_status || order.birth_time) {
+      lines.push(
+        `💕 สถานะความรัก: ${order.relationship_status || order.birth_time}`
       );
     }
     if (order.zodiac_sign) {
@@ -137,6 +198,7 @@ export function formatBillText(order: {
   lines.push(
     `📱 ช่องทางติดต่อ: ${order.contact_channel} (${order.contact_value})`,
     order.is_express ? '⚡ บริการลัดคิวพิเศษ: ใช่ (เรทเดียว 32 บาท)' : '',
+    `⏱️ เวลารอรับบริการโดยประมาณ: ${waitTime}`,
     order.customer_note ? `📝 หมายเหตุ: ${order.customer_note}` : '',
     `🛒 รายการสินค้า:\n${itemsText}`,
     (order.is_express && (order.express_fee ?? 0) > 0)

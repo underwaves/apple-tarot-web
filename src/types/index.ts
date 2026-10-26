@@ -24,6 +24,7 @@ export interface Order {
   // Fortune fields
   birth_date?: string;
   birth_time?: string;
+  relationship_status?: string;
   zodiac_sign?: string;
   question?: string;
   // Physical shipping fields
@@ -35,7 +36,7 @@ export interface Order {
   shipping_province?: string;
   shipping_postal_code?: string;
   customer_note?: string;
-  contact_channel: 'LINE' | 'Instagram' | 'Facebook' | 'Phone' | string;
+  contact_channel: 'LINE' | 'Instagram' | 'Facebook' | string;
   contact_value: string;
   items: OrderItem[];
   total_amount: number;
@@ -73,6 +74,7 @@ export interface QueueItem {
   estimated_time?: string;
   shop_note?: string;
   is_manual?: boolean;
+  is_archived?: boolean;
   created_at: string;
   updated_at: string;
 }

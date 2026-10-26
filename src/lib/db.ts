@@ -13,7 +13,89 @@ import {
   PackageItem,
   OrderType,
 } from '@/types';
-import { generateOrderNo, generateTrackingToken } from './utils';
+import {
+  generateOrderNo,
+  generateTrackingToken,
+  getEstimatedWaitTime,
+  formatQueueNo,
+} from './utils';
+
+const ARCHIVED_MARKER = '\u200B';
+
+let orderLockPromise: Promise<unknown> = Promise.resolve();
+function withOrderLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = orderLockPromise.then(fn, fn);
+  orderLockPromise = next.catch(() => {});
+  return next;
+}
+
+function extractSeqNo(orderNo?: string | null): number {
+  if (!orderNo) return 0;
+  const trimmed = orderNo.trim().replace(/^#/, '');
+  if (/^\d+$/.test(trimmed)) {
+    const n = parseInt(trimmed, 10);
+    // Ignore 6+ digit timestamp-like numbers if any, unless sequential
+    if (n > 0 && n < 1000000) return n;
+  }
+  return 0;
+}
+
+function computeNextSequenceNumber(
+  orders: { order_no?: string }[],
+  queues: { queue_no?: number; order_no?: string }[]
+): number {
+  let maxSeq = 0;
+  for (const o of orders) {
+    const seq = extractSeqNo(o.order_no);
+    if (seq > maxSeq) maxSeq = seq;
+  }
+  for (const q of queues) {
+    if (typeof q.queue_no === 'number' && q.queue_no > maxSeq && q.queue_no < 1000000) {
+      maxSeq = q.queue_no;
+    }
+    const qSeq = extractSeqNo(q.order_no);
+    if (qSeq > maxSeq) maxSeq = qSeq;
+  }
+  return maxSeq + 1;
+}
+
+export function getOrderLookupCandidates(input: string): string[] {
+  const trimmed = (input || '').trim();
+  const withoutHash = trimmed.replace(/^#+/, '').trim();
+  const candidates = new Set<string>();
+  if (trimmed) candidates.add(trimmed);
+  if (withoutHash) {
+    candidates.add(withoutHash);
+    candidates.add(withoutHash.toUpperCase());
+  }
+  if (/^\d+$/.test(withoutHash)) {
+    const num = parseInt(withoutHash, 10);
+    candidates.add(String(num).padStart(5, '0'));
+    candidates.add(String(num));
+  }
+  return Array.from(candidates);
+}
+
+function normalizeOrderRecord(order: Order): Order {
+  const rel = order.relationship_status || order.birth_time || undefined;
+  return {
+    ...order,
+    relationship_status: rel,
+  };
+}
+
+function normalizeQueueRecord(queue: QueueItem): QueueItem {
+  const rawNote = queue.shop_note;
+  const hasMarker = typeof rawNote === 'string' && rawNote.startsWith(ARCHIVED_MARKER);
+  const isArchived = Boolean(queue.is_archived) || hasMarker;
+  const cleanNote =
+    typeof rawNote === 'string' ? rawNote.replace(/^\u200B+/, '') : rawNote;
+  return {
+    ...queue,
+    is_archived: isArchived,
+    shop_note: cleanNote,
+  };
+}
 
 function getDataDir(): string {
   return process.env.DATA_DIR_PATH
@@ -60,7 +142,7 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
     status_options: ['รอตรวจสลิป', 'รอตรวจคิว', 'กำลังดูดวง', 'กำลังดำเนินการ', 'ส่งคำทำนายแล้ว', 'เสร็จแล้ว'],
     enable_express_queue: true,
     express_queue_fee: 32,
-    express_estimated_time: '⚡ ภายใน 12-24 ชั่วโมง',
+    express_estimated_time: '1 - 3 ชม. (ส่วนมากเร็วกว่านั้น)',
     is_store_open: true,
     store_close_message: 'ขณะนี้ร้านปิดรับคิวชั่วคราว สามารถแวะชมบริการหรือทักสอบถามทาง LINE ได้นะคะ 🌙',
     notify_on_slip: true,
@@ -110,7 +192,7 @@ export const DEFAULT_STORE_DATA: LocalDatabase = {
           id: 'pkg-3',
           category_id: 'cat-1',
           name: 'ลัดคิวแบบเจาะจง',
-          description: 'ถามคำถามเจาะจง พร้อมสิทธิ์ลัดคิวพิเศษ (เรทเดียว 32 บาท) ได้รับคำทำนายด่วนภายใน 12-24 ชั่วโมง',
+          description: 'ถามคำถามเจาะจง พร้อมสิทธิ์ลัดคิวพิเศษ (เรทเดียว 32 บาท) เวลารอรับบริการ 1 - 3 ชม. (ส่วนมากเร็วกว่านั้น)',
           price: 32,
           badge: '⚡ ลัดคิว 32.-',
           is_active: true,
@@ -398,6 +480,7 @@ export async function createOrder(data: {
   order_type?: OrderType;
   birth_date?: string;
   birth_time?: string;
+  relationship_status?: string;
   zodiac_sign?: string;
   question?: string;
   shipping_name?: string;
@@ -413,28 +496,80 @@ export async function createOrder(data: {
   items: { id: string; quantity: number }[];
   is_express?: boolean;
 }): Promise<Order> {
-  // Fetch packages and settings strictly from the active single source of truth
-  let allPackages: PackageItem[] = [];
-  let expressFeeSetting = 32;
+  return withOrderLock(async () => {
+    // Fetch packages and settings strictly from the active single source of truth
+    let allPackages: PackageItem[] = [];
+    let expressFeeSetting = 32;
 
-  if (isNeonConfigured) {
-    try {
-      const [neonCats, neonSettings] = await Promise.all([
-        neonGet<Category[]>('categories', DEFAULT_STORE_DATA.categories),
-        neonGet<StoreSettings>('settings', DEFAULT_STORE_DATA.settings),
-      ]);
-      if (neonSettings && neonSettings.is_store_open === false) {
-        throw new Error(neonSettings.store_close_message || 'ขณะนี้ร้านปิดรับคำสั่งซื้อชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🔒');
+    if (isNeonConfigured) {
+      try {
+        const [neonCats, neonSettings] = await Promise.all([
+          neonGet<Category[]>('categories', DEFAULT_STORE_DATA.categories),
+          neonGet<StoreSettings>('settings', DEFAULT_STORE_DATA.settings),
+        ]);
+        if (neonSettings && neonSettings.is_store_open === false) {
+          throw new Error(neonSettings.store_close_message || 'ขณะนี้ร้านปิดรับคำสั่งซื้อชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🔒');
+        }
+        allPackages = (neonCats || []).flatMap((c) => c.packages);
+        if (neonSettings?.express_queue_fee !== undefined) {
+          expressFeeSetting = Number(neonSettings.express_queue_fee);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('ปิดรับคำสั่งซื้อชั่วคราว')) {
+          throw e;
+        }
+        console.warn('Neon package read failed in createOrder, fallback:', e);
+        const local = readLocalDb();
+        if (local.settings.is_store_open === false) {
+          throw new Error(local.settings.store_close_message || 'ขณะนี้ร้านปิดรับคำสั่งซื้อชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🔒');
+        }
+        allPackages = local.categories.flatMap((c) => c.packages);
+        if (local.settings.express_queue_fee !== undefined) {
+          expressFeeSetting = Number(local.settings.express_queue_fee);
+        }
       }
-      allPackages = (neonCats || []).flatMap((c) => c.packages);
-      if (neonSettings?.express_queue_fee !== undefined) {
-        expressFeeSetting = Number(neonSettings.express_queue_fee);
+    } else if (isSupabaseConfigured && supabaseAdmin) {
+      const { data: pkgs, error } = await supabaseAdmin
+        .from('packages')
+        .select('*')
+        .eq('is_active', true);
+
+      if (error) {
+        throw new Error(`Failed to retrieve packages from Supabase: ${error.message}`);
       }
-    } catch (e) {
-      if (e instanceof Error && e.message.includes('ปิดรับคำสั่งซื้อชั่วคราว')) {
-        throw e;
+
+      const { data: stSetting } = await supabaseAdmin
+        .from('store_settings')
+        .select('value')
+        .eq('key', 'express_queue_fee')
+        .maybeSingle();
+
+      if (stSetting && stSetting.value !== undefined) {
+        expressFeeSetting = Number(stSetting.value);
       }
-      console.warn('Neon package read failed in createOrder, fallback:', e);
+
+      allPackages = (pkgs || []).map((p: {
+        id: string;
+        category_id: string;
+        name: string;
+        description: string;
+        price: number;
+        original_price?: number;
+        badge?: string;
+        is_active: boolean;
+        product_type?: 'fortune' | 'physical';
+      }) => ({
+        id: p.id,
+        category_id: p.category_id,
+        name: p.name,
+        description: p.description,
+        price: Number(p.price),
+        original_price: p.original_price ? Number(p.original_price) : undefined,
+        badge: p.badge,
+        is_active: p.is_active,
+        product_type: p.product_type,
+      }));
+    } else {
       const local = readLocalDb();
       if (local.settings.is_store_open === false) {
         throw new Error(local.settings.store_close_message || 'ขณะนี้ร้านปิดรับคำสั่งซื้อชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🔒');
@@ -444,220 +579,199 @@ export async function createOrder(data: {
         expressFeeSetting = Number(local.settings.express_queue_fee);
       }
     }
-  } else if (isSupabaseConfigured && supabaseAdmin) {
-    const { data: pkgs, error } = await supabaseAdmin
-      .from('packages')
-      .select('*')
-      .eq('is_active', true);
 
-    if (error) {
-      throw new Error(`Failed to retrieve packages from Supabase: ${error.message}`);
+    // Validate items and compute totals strictly from database packages
+    const validatedItems: Order['items'] = [];
+    let calculatedTotal = 0;
+
+    for (const item of data.items) {
+      const pkg = allPackages.find((p) => p.id === item.id);
+      if (!pkg) continue;
+      const qty = Math.max(1, Math.min(item.quantity || 1, 99));
+      validatedItems.push({
+        id: pkg.id,
+        name: pkg.name,
+        price: pkg.price,
+        quantity: qty,
+        desc: pkg.description,
+        product_type: pkg.product_type,
+      });
+      calculatedTotal += pkg.price * qty;
     }
 
-    const { data: stSetting } = await supabaseAdmin
-      .from('store_settings')
-      .select('value')
-      .eq('key', 'express_queue_fee')
-      .maybeSingle();
-
-    if (stSetting && stSetting.value !== undefined) {
-      expressFeeSetting = Number(stSetting.value);
+    if (validatedItems.length === 0) {
+      throw new Error('กรุณาเลือกสินค้าหรือแพ็กเกจอย่างน้อย 1 รายการ');
     }
 
-    allPackages = (pkgs || []).map((p: {
-      id: string;
-      category_id: string;
-      name: string;
-      description: string;
-      price: number;
-      original_price?: number;
-      badge?: string;
-      is_active: boolean;
-      product_type?: 'fortune' | 'physical';
-    }) => ({
-      id: p.id,
-      category_id: p.category_id,
-      name: p.name,
-      description: p.description,
-      price: Number(p.price),
-      original_price: p.original_price ? Number(p.original_price) : undefined,
-      badge: p.badge,
-      is_active: p.is_active,
-      product_type: p.product_type,
-    }));
-  } else {
-    const local = readLocalDb();
-    if (local.settings.is_store_open === false) {
-      throw new Error(local.settings.store_close_message || 'ขณะนี้ร้านปิดรับคำสั่งซื้อชั่วคราว ขออภัยในความไม่สะดวกค่ะ 🔒');
-    }
-    allPackages = local.categories.flatMap((c) => c.packages);
-    if (local.settings.express_queue_fee !== undefined) {
-      expressFeeSetting = Number(local.settings.express_queue_fee);
-    }
-  }
+    const hasExpressItem = validatedItems.some(
+      (i) => i.id === 'pkg-3' || i.name.includes('ลัดคิว')
+    );
+    const isExpress = Boolean(data.is_express) || hasExpressItem;
 
-  // Validate items and compute totals strictly from database packages
-  const validatedItems: Order['items'] = [];
-  let calculatedTotal = 0;
+    // Real flat express queue rate is 32 THB ("ลัดคิวมีเรทเดียวเป็นราคา 32 บาทเลย")
+    const expressFlatRate = expressFeeSetting || 32;
+    let expressFee = 0;
 
-  for (const item of data.items) {
-    const pkg = allPackages.find((p) => p.id === item.id);
-    if (!pkg) continue;
-    const qty = Math.max(1, Math.min(item.quantity || 1, 99));
-    validatedItems.push({
-      id: pkg.id,
-      name: pkg.name,
-      price: pkg.price,
-      quantity: qty,
-      desc: pkg.description,
-      product_type: pkg.product_type,
+    if (isExpress) {
+      if (hasExpressItem) {
+        // pkg-3 is already 32 THB in calculatedTotal, no extra fee needed
+        expressFee = 0;
+      } else {
+        const fortuneSubtotal = validatedItems
+          .filter((i) => i.product_type !== 'physical')
+          .reduce((acc, i) => acc + i.price * i.quantity, 0);
+        expressFee = Math.max(0, expressFlatRate - fortuneSubtotal);
+        calculatedTotal += expressFee;
+      }
+    }
+
+    // Determine order type based on validated products
+    const hasPhysical = validatedItems.some((i) => i.product_type === 'physical');
+    const hasFortune = validatedItems.some((i) => i.product_type !== 'physical');
+    const detectedOrderType: OrderType =
+      hasPhysical && hasFortune ? 'mixed' : hasPhysical ? 'physical' : 'fortune';
+
+    // Validate required fields based on order type
+    if (hasPhysical) {
+      if (!data.shipping_address && !data.shipping_name) {
+        throw new Error('สินค้าจริงต้องระบุข้อมูลจัดส่ง (ชื่อผู้รับและที่อยู่จัดส่ง)');
+      }
+    }
+
+    const relStatus = hasFortune
+      ? (data.relationship_status || data.birth_time)?.trim() || undefined
+      : undefined;
+
+    const trackingToken = generateTrackingToken();
+    const now = new Date().toISOString();
+
+    const buildOrderObject = (seqNo: number): Order => ({
+      id: 'ord-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+      order_no: generateOrderNo(seqNo),
+      tracking_token: trackingToken,
+      order_type: detectedOrderType,
+      customer_name: data.customer_name.trim(),
+      birth_date: hasFortune ? data.birth_date?.trim() || undefined : undefined,
+      birth_time: relStatus,
+      relationship_status: relStatus,
+      zodiac_sign: hasFortune ? data.zodiac_sign?.trim() || undefined : undefined,
+      question: hasFortune ? data.question?.trim() || undefined : undefined,
+      shipping_name: hasPhysical ? data.shipping_name?.trim() || undefined : undefined,
+      shipping_phone: hasPhysical ? data.shipping_phone?.trim() || undefined : undefined,
+      shipping_address: hasPhysical ? data.shipping_address?.trim() || undefined : undefined,
+      shipping_subdistrict: hasPhysical ? data.shipping_subdistrict?.trim() || undefined : undefined,
+      shipping_district: hasPhysical ? data.shipping_district?.trim() || undefined : undefined,
+      shipping_province: hasPhysical ? data.shipping_province?.trim() || undefined : undefined,
+      shipping_postal_code: hasPhysical ? data.shipping_postal_code?.trim() || undefined : undefined,
+      customer_note: data.customer_note?.trim() || undefined,
+      contact_channel: data.contact_channel,
+      contact_value: data.contact_value.trim(),
+      items: validatedItems,
+      total_amount: calculatedTotal,
+      is_express: isExpress,
+      express_fee: isExpress ? expressFee : undefined,
+      status: 'pending_slip',
+      created_at: now,
+      updated_at: now,
     });
-    calculatedTotal += pkg.price * qty;
-  }
 
-  if (validatedItems.length === 0) {
-    throw new Error('กรุณาเลือกสินค้าหรือแพ็กเกจอย่างน้อย 1 รายการ');
-  }
-
-  const hasExpressItem = validatedItems.some(
-    (i) => i.id === 'pkg-3' || i.name.includes('ลัดคิว')
-  );
-  const isExpress = Boolean(data.is_express) || hasExpressItem;
-
-  // Real flat express queue rate is 32 THB ("ลัดคิวมีเรทเดียวเป็นราคา 32 บาทเลย")
-  const expressFlatRate = expressFeeSetting || 32;
-  let expressFee = 0;
-
-  if (isExpress) {
-    if (hasExpressItem) {
-      // pkg-3 is already 32 THB in calculatedTotal, no extra fee needed
-      expressFee = 0;
-    } else {
-      // If customer ordered regular fortune questions (15 or 25 THB) and opted for express queue:
-      // Express queue has only ONE flat rate: 32 THB
-      const fortuneSubtotal = validatedItems
-        .filter((i) => i.product_type !== 'physical')
-        .reduce((acc, i) => acc + i.price * i.quantity, 0);
-      expressFee = Math.max(0, expressFlatRate - fortuneSubtotal);
-      calculatedTotal += expressFee;
+    if (isNeonConfigured) {
+      let newOrder: Order;
+      try {
+        const [orders, queues] = await Promise.all([
+          neonGet<Order[]>('orders', []),
+          neonGet<QueueItem[]>('queues', []),
+        ]);
+        const nextSeq = computeNextSequenceNumber(orders, queues);
+        newOrder = buildOrderObject(nextSeq);
+        orders.unshift(newOrder);
+        await neonSet('orders', orders);
+      } catch (err) {
+        console.error('Failed to save order to Neon:', err);
+        const local = readLocalDb();
+        const nextSeq = computeNextSequenceNumber(local.orders, local.queues);
+        newOrder = buildOrderObject(nextSeq);
+      }
+      try {
+        const local = readLocalDb();
+        local.orders.unshift(newOrder);
+        writeLocalDb(local);
+      } catch {}
+      return normalizeOrderRecord(newOrder);
     }
-  }
 
-  // Determine order type based on validated products
-  const hasPhysical = validatedItems.some((i) => i.product_type === 'physical');
-  const hasFortune = validatedItems.some((i) => i.product_type !== 'physical');
-  const detectedOrderType: OrderType =
-    hasPhysical && hasFortune ? 'mixed' : hasPhysical ? 'physical' : 'fortune';
+    if (isSupabaseConfigured && supabaseAdmin) {
+      const [{ data: existingOrders }, { data: existingQueues }] = await Promise.all([
+        supabaseAdmin.from('orders').select('order_no'),
+        supabaseAdmin.from('queues').select('queue_no, order_no'),
+      ]);
+      let nextSeq = computeNextSequenceNumber(existingOrders || [], existingQueues || []);
 
-  // Validate required fields based on order type
-  if (hasPhysical) {
-    if (!data.shipping_address && !data.shipping_name) {
-      throw new Error('สินค้าจริงต้องระบุข้อมูลจัดส่ง (ชื่อผู้รับและที่อยู่จัดส่ง)');
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const newOrder = buildOrderObject(nextSeq + attempt);
+        const { data: inserted, error } = await supabaseAdmin
+          .from('orders')
+          .insert({
+            order_no: newOrder.order_no,
+            tracking_token: newOrder.tracking_token,
+            order_type: newOrder.order_type,
+            customer_name: newOrder.customer_name,
+            birth_date: newOrder.birth_date || null,
+            birth_time: newOrder.relationship_status || newOrder.birth_time || null,
+            zodiac_sign: newOrder.zodiac_sign || null,
+            question: newOrder.question || null,
+            shipping_name: newOrder.shipping_name || null,
+            shipping_phone: newOrder.shipping_phone || null,
+            shipping_address: newOrder.shipping_address || null,
+            shipping_subdistrict: newOrder.shipping_subdistrict || null,
+            shipping_district: newOrder.shipping_district || null,
+            shipping_province: newOrder.shipping_province || null,
+            shipping_postal_code: newOrder.shipping_postal_code || null,
+            customer_note: newOrder.customer_note || null,
+            contact_channel: newOrder.contact_channel,
+            contact_value: newOrder.contact_value,
+            items: newOrder.items,
+            total_amount: newOrder.total_amount,
+            is_express: newOrder.is_express || false,
+            express_fee: newOrder.express_fee || 0,
+            status: newOrder.status,
+          })
+          .select()
+          .single();
+
+        if (!error) {
+          if (inserted) {
+            newOrder.id = inserted.id;
+          }
+          return normalizeOrderRecord(newOrder);
+        }
+
+        // Retry with incremented sequence if unique constraint violation occurred
+        if (error.code === '23505' || error.message?.toLowerCase().includes('duplicate')) {
+          continue;
+        }
+        throw new Error(`Failed to save order to Supabase: ${error.message}`);
+      }
+      throw new Error('ไม่สามารถสร้างเลขบิลคำสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
     }
-  }
 
-  const orderNo = generateOrderNo();
-  const trackingToken = generateTrackingToken();
-  const now = new Date().toISOString();
-
-  const newOrder: Order = {
-    id: 'ord-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-    order_no: orderNo,
-    tracking_token: trackingToken,
-    order_type: detectedOrderType,
-    customer_name: data.customer_name.trim(),
-    birth_date: hasFortune ? data.birth_date?.trim() || undefined : undefined,
-    birth_time: hasFortune ? data.birth_time?.trim() || undefined : undefined,
-    zodiac_sign: hasFortune ? data.zodiac_sign?.trim() || undefined : undefined,
-    question: hasFortune ? data.question?.trim() || undefined : undefined,
-    shipping_name: hasPhysical ? data.shipping_name?.trim() || undefined : undefined,
-    shipping_phone: hasPhysical ? data.shipping_phone?.trim() || undefined : undefined,
-    shipping_address: hasPhysical ? data.shipping_address?.trim() || undefined : undefined,
-    shipping_subdistrict: hasPhysical ? data.shipping_subdistrict?.trim() || undefined : undefined,
-    shipping_district: hasPhysical ? data.shipping_district?.trim() || undefined : undefined,
-    shipping_province: hasPhysical ? data.shipping_province?.trim() || undefined : undefined,
-    shipping_postal_code: hasPhysical ? data.shipping_postal_code?.trim() || undefined : undefined,
-    customer_note: data.customer_note?.trim() || undefined,
-    contact_channel: data.contact_channel,
-    contact_value: data.contact_value.trim(),
-    items: validatedItems,
-    total_amount: calculatedTotal,
-    is_express: isExpress,
-    express_fee: isExpress ? expressFee : undefined,
-    status: 'pending_slip',
-    created_at: now,
-    updated_at: now,
-  };
-
-  if (isNeonConfigured) {
-    try {
-      const orders = await neonGet<Order[]>('orders', []);
-      orders.unshift(newOrder);
-      await neonSet('orders', orders);
-    } catch (err) {
-      console.error('Failed to save order to Neon:', err);
-    }
-    try {
-      const local = readLocalDb();
-      local.orders.unshift(newOrder);
-      writeLocalDb(local);
-    } catch {}
-    return newOrder;
-  }
-
-  if (isSupabaseConfigured && supabaseAdmin) {
-    const { data: inserted, error } = await supabaseAdmin
-      .from('orders')
-      .insert({
-        order_no: newOrder.order_no,
-        tracking_token: newOrder.tracking_token,
-        order_type: newOrder.order_type,
-        customer_name: newOrder.customer_name,
-        birth_date: newOrder.birth_date || null,
-        birth_time: newOrder.birth_time || null,
-        zodiac_sign: newOrder.zodiac_sign || null,
-        question: newOrder.question || null,
-        shipping_name: newOrder.shipping_name || null,
-        shipping_phone: newOrder.shipping_phone || null,
-        shipping_address: newOrder.shipping_address || null,
-        shipping_subdistrict: newOrder.shipping_subdistrict || null,
-        shipping_district: newOrder.shipping_district || null,
-        shipping_province: newOrder.shipping_province || null,
-        shipping_postal_code: newOrder.shipping_postal_code || null,
-        customer_note: newOrder.customer_note || null,
-        contact_channel: newOrder.contact_channel,
-        contact_value: newOrder.contact_value,
-        items: newOrder.items,
-        total_amount: newOrder.total_amount,
-        is_express: newOrder.is_express || false,
-        express_fee: newOrder.express_fee || 0,
-        status: newOrder.status,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to save order to Supabase: ${error.message}`);
-    }
-    if (inserted) {
-      newOrder.id = inserted.id;
-    }
-    return newOrder;
-  }
-
-  // Local File Mode
-  const local = readLocalDb();
-  local.orders.unshift(newOrder);
-  writeLocalDb(local);
-  return newOrder;
+    // Local File Mode
+    const local = readLocalDb();
+    const nextSeq = computeNextSequenceNumber(local.orders, local.queues);
+    const newOrder = buildOrderObject(nextSeq);
+    local.orders.unshift(newOrder);
+    writeLocalDb(local);
+    return normalizeOrderRecord(newOrder);
+  });
 }
 
 export async function uploadSlip(orderNo: string, slipUrl: string, filename?: string): Promise<Order> {
   const now = new Date().toISOString();
+  const candidates = getOrderLookupCandidates(orderNo);
 
   if (isNeonConfigured) {
     const orders = await neonGet<Order[]>('orders', []);
-    const order = orders.find((o) => o.order_no === orderNo || o.id === orderNo);
+    const order = orders.find((o) => candidates.includes(o.order_no) || candidates.includes(o.id));
     if (!order) {
       throw new Error('ไม่พบข้อมูลคำสั่งซื้อ');
     }
@@ -669,7 +783,7 @@ export async function uploadSlip(orderNo: string, slipUrl: string, filename?: st
 
     try {
       const local = readLocalDb();
-      const locOrder = local.orders.find((o) => o.order_no === orderNo || o.id === orderNo);
+      const locOrder = local.orders.find((o) => candidates.includes(o.order_no) || candidates.includes(o.id));
       if (locOrder) {
         locOrder.slip_url = slipUrl;
         locOrder.slip_filename = filename;
@@ -679,15 +793,15 @@ export async function uploadSlip(orderNo: string, slipUrl: string, filename?: st
       }
     } catch {}
 
-    return order;
+    return normalizeOrderRecord(order);
   }
 
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data: existing, error: findErr } = await supabaseAdmin
       .from('orders')
       .select('*')
-      .eq('order_no', orderNo)
-      .single();
+      .in('order_no', candidates)
+      .maybeSingle();
 
     if (findErr || !existing) {
       throw new Error('ไม่พบข้อมูลคำสั่งซื้อ');
@@ -701,19 +815,19 @@ export async function uploadSlip(orderNo: string, slipUrl: string, filename?: st
         status: 'pending_verification',
         updated_at: now,
       })
-      .eq('order_no', orderNo)
+      .eq('id', existing.id)
       .select()
       .single();
 
     if (updateErr) {
       throw new Error(`Failed to update slip in Supabase: ${updateErr.message}`);
     }
-    return updated as Order;
+    return normalizeOrderRecord(updated as Order);
   }
 
   // Local File Mode
   const local = readLocalDb();
-  const order = local.orders.find((o) => o.order_no === orderNo || o.id === orderNo);
+  const order = local.orders.find((o) => candidates.includes(o.order_no) || candidates.includes(o.id));
   if (!order) {
     throw new Error('ไม่พบข้อมูลคำสั่งซื้อ');
   }
@@ -724,50 +838,56 @@ export async function uploadSlip(orderNo: string, slipUrl: string, filename?: st
   order.updated_at = now;
 
   writeLocalDb(local);
-  return order;
+  return normalizeOrderRecord(order);
 }
 
 export async function getOrder(orderNoOrId: string, trackingToken?: string): Promise<Order | null> {
+  const candidates = getOrderLookupCandidates(orderNoOrId);
+  const cleanToken = trackingToken?.trim();
+
   if (isNeonConfigured) {
     const orders = await neonGet<Order[]>('orders', []);
     const order = orders.find(
       (o) =>
-        (o.order_no === orderNoOrId || o.id === orderNoOrId) &&
-        (!trackingToken || o.tracking_token === trackingToken)
+        (candidates.includes(o.order_no) || candidates.includes(o.id)) &&
+        (!cleanToken || o.tracking_token === cleanToken)
     );
-    if (order) return order;
+    if (order) return normalizeOrderRecord(order);
   }
 
   if (isSupabaseConfigured && supabaseAdmin) {
-    let query = supabaseAdmin
-      .from('orders')
-      .select('*')
-      .or(`order_no.eq.${orderNoOrId},id.eq.${orderNoOrId}`);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderNoOrId.trim());
+    let query = supabaseAdmin.from('orders').select('*');
+    if (isUuid) {
+      query = query.or(`id.eq.${orderNoOrId.trim()},order_no.in.(${candidates.join(',')})`);
+    } else {
+      query = query.in('order_no', candidates);
+    }
 
-    if (trackingToken) {
-      query = query.eq('tracking_token', trackingToken);
+    if (cleanToken) {
+      query = query.eq('tracking_token', cleanToken);
     }
 
     const { data, error } = await query.maybeSingle();
     if (error) {
       throw new Error(`Failed to fetch order from Supabase: ${error.message}`);
     }
-    return (data as Order) || null;
+    return data ? normalizeOrderRecord(data as Order) : null;
   }
 
   const local = readLocalDb();
   const order = local.orders.find(
     (o) =>
-      (o.order_no === orderNoOrId || o.id === orderNoOrId) &&
-      (!trackingToken || o.tracking_token === trackingToken)
+      (candidates.includes(o.order_no) || candidates.includes(o.id)) &&
+      (!cleanToken || o.tracking_token === cleanToken)
   );
-  return order || null;
+  return order ? normalizeOrderRecord(order) : null;
 }
 
 export async function getAllOrders(): Promise<Order[]> {
   if (isNeonConfigured) {
     const orders = await neonGet<Order[]>('orders', []);
-    return orders;
+    return orders.map(normalizeOrderRecord);
   }
 
   if (isSupabaseConfigured && supabaseAdmin) {
@@ -779,11 +899,11 @@ export async function getAllOrders(): Promise<Order[]> {
     if (error) {
       throw new Error(`Failed to fetch orders from Supabase: ${error.message}`);
     }
-    return (data as Order[]) || [];
+    return ((data as Order[]) || []).map(normalizeOrderRecord);
   }
 
   const local = readLocalDb();
-  return local.orders;
+  return local.orders.map(normalizeOrderRecord);
 }
 
 export async function deleteOrder(orderIdOrNo: string): Promise<boolean> {
@@ -827,7 +947,7 @@ export async function clearAllOrders(): Promise<boolean> {
 export async function getAllQueues(): Promise<QueueItem[]> {
   if (isNeonConfigured) {
     const queues = await neonGet<QueueItem[]>('queues', []);
-    return queues.sort((a, b) => a.queue_no - b.queue_no);
+    return queues.map(normalizeQueueRecord).sort((a, b) => a.queue_no - b.queue_no);
   }
 
   if (isSupabaseConfigured && supabaseAdmin) {
@@ -839,76 +959,185 @@ export async function getAllQueues(): Promise<QueueItem[]> {
     if (error) {
       throw new Error(`Failed to fetch queues from Supabase: ${error.message}`);
     }
-    return (data as QueueItem[]) || [];
+    return ((data as QueueItem[]) || []).map(normalizeQueueRecord);
   }
 
   const local = readLocalDb();
-  return local.queues.sort((a, b) => a.queue_no - b.queue_no);
+  return local.queues.map(normalizeQueueRecord).sort((a, b) => a.queue_no - b.queue_no);
 }
 
 export async function getQueueByOrder(orderNo: string): Promise<QueueItem | null> {
+  const candidates = getOrderLookupCandidates(orderNo);
+
   if (isNeonConfigured) {
     const queues = await neonGet<QueueItem[]>('queues', []);
-    const q = queues.find((item) => item.order_no === orderNo);
-    return q || null;
+    const q = queues.find((item) => candidates.includes(item.order_no));
+    return q ? normalizeQueueRecord(q) : null;
   }
 
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data, error } = await supabaseAdmin
       .from('queues')
       .select('*')
-      .eq('order_no', orderNo)
+      .in('order_no', candidates)
       .maybeSingle();
 
     if (error) {
       throw new Error(`Failed to fetch queue from Supabase: ${error.message}`);
     }
-    return (data as QueueItem) || null;
+    return data ? normalizeQueueRecord(data as QueueItem) : null;
   }
 
   const local = readLocalDb();
-  const q = local.queues.find((item) => item.order_no === orderNo);
-  return q || null;
+  const q = local.queues.find((item) => candidates.includes(item.order_no));
+  return q ? normalizeQueueRecord(q) : null;
 }
 
 /**
  * Confirm Payment & Automatically Add to Queue without duplication
  */
 export async function confirmOrderPayment(orderIdOrNo: string) {
-  const now = new Date().toISOString();
+  return withOrderLock(async () => {
+    const now = new Date().toISOString();
+    const candidates = getOrderLookupCandidates(orderIdOrNo);
 
-  if (isNeonConfigured) {
-    const [orders, queues, storeInfo] = await Promise.all([
-      neonGet<Order[]>('orders', []),
-      neonGet<QueueItem[]>('queues', []),
-      getStoreData(),
-    ]);
+    if (isNeonConfigured) {
+      const [orders, queues] = await Promise.all([
+        neonGet<Order[]>('orders', []),
+        neonGet<QueueItem[]>('queues', []),
+      ]);
 
-    const order = orders.find((o) => o.id === orderIdOrNo || o.order_no === orderIdOrNo);
-    if (!order) {
-      throw new Error('ไม่พบคำสั่งซื้อ');
+      const order = orders.find(
+        (o) => candidates.includes(o.id) || candidates.includes(o.order_no)
+      );
+      if (!order) {
+        throw new Error('ไม่พบคำสั่งซื้อ');
+      }
+
+      order.status = 'confirmed';
+      order.updated_at = now;
+
+      let queueItem = queues.find((q) => q.order_no === order.order_no);
+      if (!queueItem) {
+        const orderSeq = extractSeqNo(order.order_no);
+        const isOrderSeqFree =
+          orderSeq > 0 && !queues.some((q) => q.queue_no === orderSeq);
+        const nextQueueNo = isOrderSeqFree
+          ? orderSeq
+          : (queues.length > 0 ? Math.max(...queues.map((q) => q.queue_no)) : 0) + 1;
+
+        const isExpress = Boolean(order.is_express);
+        const defaultEstimated = getEstimatedWaitTime(order.items || [], isExpress);
+        const defaultNote = isExpress
+          ? '⚡ รับออเดอร์คิวด่วนพิเศษ ลัดคิวตามลำดับเร่งด่วนค่ะ'
+          : 'รับออเดอร์เรียบร้อย รอคิวจัดทำตามลำดับค่ะ';
+
+        const itemsSummary = (order.items || []).map((i) => `${i.name} x${i.quantity}`).join(', ');
+
+        queueItem = {
+          id: 'q-' + Date.now(),
+          queue_no: nextQueueNo,
+          order_id: order.id,
+          order_no: order.order_no,
+          customer_name: order.customer_name,
+          items_summary: isExpress ? `⚡ [ลัดคิว] ${itemsSummary}` : itemsSummary,
+          contact_info: `${order.contact_channel}: ${order.contact_value}`,
+          contact_channel: order.contact_channel,
+          contact_value: order.contact_value,
+          status: 'รอตรวจคิว',
+          is_express: isExpress,
+          estimated_time: defaultEstimated,
+          shop_note: defaultNote,
+          is_manual: false,
+          is_archived: false,
+          created_at: now,
+          updated_at: now,
+        };
+
+        queues.push(queueItem);
+        order.queue_id = queueItem.id;
+      }
+
+      await Promise.all([neonSet('orders', orders), neonSet('queues', queues)]);
+
+      // Mirror to local DB
+      try {
+        const local = readLocalDb();
+        const locOrder = local.orders.find(
+          (o) => candidates.includes(o.id) || candidates.includes(o.order_no)
+        );
+        if (locOrder) {
+          locOrder.status = 'confirmed';
+          locOrder.updated_at = now;
+          locOrder.queue_id = queueItem.id;
+        }
+        if (!local.queues.some((q) => q.order_no === order.order_no)) {
+          local.queues.push(queueItem);
+        }
+        writeLocalDb(local);
+      } catch {}
+
+      return { order: normalizeOrderRecord(order), queue: normalizeQueueRecord(queueItem) };
     }
 
-    order.status = 'confirmed';
-    order.updated_at = now;
+    if (isSupabaseConfigured && supabaseAdmin) {
+      // 1. Fetch order
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderIdOrNo.trim());
+      let oQuery = supabaseAdmin.from('orders').select('*');
+      if (isUuid) {
+        oQuery = oQuery.or(`id.eq.${orderIdOrNo.trim()},order_no.in.(${candidates.join(',')})`);
+      } else {
+        oQuery = oQuery.in('order_no', candidates);
+      }
+      const { data: order, error: orderErr } = await oQuery.maybeSingle();
 
-    let queueItem = queues.find((q) => q.order_no === order.order_no);
-    if (!queueItem) {
-      const nextQueueNo =
-        (queues.length > 0 ? Math.max(...queues.map((q) => q.queue_no)) : 0) + 1;
+      if (orderErr || !order) {
+        throw new Error('ไม่พบคำสั่งซื้อ');
+      }
+
+      // 2. Update order status
+      const { error: updErr } = await supabaseAdmin
+        .from('orders')
+        .update({ status: 'confirmed', updated_at: now })
+        .eq('id', order.id);
+
+      if (updErr) {
+        throw new Error(`Failed to confirm order in Supabase: ${updErr.message}`);
+      }
+      order.status = 'confirmed';
+
+      // 3. Check existing queue for this order
+      const { data: existingQ } = await supabaseAdmin
+        .from('queues')
+        .select('*')
+        .eq('order_no', order.order_no)
+        .maybeSingle();
+
+      if (existingQ) {
+        return {
+          order: normalizeOrderRecord(order as Order),
+          queue: normalizeQueueRecord(existingQ as QueueItem),
+        };
+      }
+
+      // 4. Calculate next queue_no
+      const { data: allQ } = await supabaseAdmin.from('queues').select('queue_no');
+      const existingNos = new Set((allQ || []).map((q: { queue_no: number }) => q.queue_no));
+      const orderSeq = extractSeqNo(order.order_no);
+      const maxQ = allQ && allQ.length > 0 ? Math.max(...allQ.map((q: { queue_no: number }) => q.queue_no)) : 0;
+      const nextQueueNo = orderSeq > 0 && !existingNos.has(orderSeq) ? orderSeq : maxQ + 1;
 
       const isExpress = Boolean(order.is_express);
-      const defaultEstimated = isExpress
-        ? (storeInfo.settings.express_estimated_time || '⚡ ภายใน 12-24 ชั่วโมง')
-        : '1-2 วันทำการ';
+      const defaultEstimated = getEstimatedWaitTime((order.items as Order['items']) || [], isExpress);
       const defaultNote = isExpress
         ? '⚡ รับออเดอร์คิวด่วนพิเศษ ลัดคิวตามลำดับเร่งด่วนค่ะ'
         : 'รับออเดอร์เรียบร้อย รอคิวจัดทำตามลำดับค่ะ';
 
-      const itemsSummary = (order.items || []).map((i) => `${i.name} x${i.quantity}`).join(', ');
+      const itemsSummary = (order.items as Order['items'])
+        .map((i) => `${i.name} x${i.quantity}`)
+        .join(', ');
 
-      queueItem = {
-        id: 'q-' + Date.now(),
+      const newQueuePayload = {
         queue_no: nextQueueNo,
         order_id: order.id,
         order_no: order.order_no,
@@ -926,171 +1155,83 @@ export async function confirmOrderPayment(orderIdOrNo: string) {
         updated_at: now,
       };
 
-      queues.push(queueItem);
-      order.queue_id = queueItem.id;
+      const { data: insertedQ, error: qErr } = await supabaseAdmin
+        .from('queues')
+        .insert(newQueuePayload)
+        .select()
+        .single();
+
+      if (qErr) {
+        throw new Error(`Failed to insert queue in Supabase: ${qErr.message}`);
+      }
+
+      await supabaseAdmin
+        .from('orders')
+        .update({ queue_id: insertedQ.id })
+        .eq('id', order.id);
+
+      return {
+        order: normalizeOrderRecord(order as Order),
+        queue: normalizeQueueRecord(insertedQ as QueueItem),
+      };
     }
 
-    await Promise.all([neonSet('orders', orders), neonSet('queues', queues)]);
-
-    // Mirror to local DB
-    try {
-      const local = readLocalDb();
-      const locOrder = local.orders.find((o) => o.id === orderIdOrNo || o.order_no === orderIdOrNo);
-      if (locOrder) {
-        locOrder.status = 'confirmed';
-        locOrder.updated_at = now;
-        locOrder.queue_id = queueItem.id;
-      }
-      if (!local.queues.some((q) => q.order_no === order.order_no)) {
-        local.queues.push(queueItem);
-      }
-      writeLocalDb(local);
-    } catch {}
-
-    return { order, queue: queueItem };
-  }
-
-  if (isSupabaseConfigured && supabaseAdmin) {
-    // 1. Fetch order
-    const { data: order, error: orderErr } = await supabaseAdmin
-      .from('orders')
-      .select('*')
-      .or(`id.eq.${orderIdOrNo},order_no.eq.${orderIdOrNo}`)
-      .single();
-
-    if (orderErr || !order) {
+    // Local File Mode
+    const local = readLocalDb();
+    const order = local.orders.find(
+      (o) => candidates.includes(o.id) || candidates.includes(o.order_no)
+    );
+    if (!order) {
       throw new Error('ไม่พบคำสั่งซื้อ');
     }
 
-    // 2. Update order status
-    const { error: updErr } = await supabaseAdmin
-      .from('orders')
-      .update({ status: 'confirmed', updated_at: now })
-      .eq('id', order.id);
-
-    if (updErr) {
-      throw new Error(`Failed to confirm order in Supabase: ${updErr.message}`);
-    }
     order.status = 'confirmed';
+    order.updated_at = now;
 
-    // 3. Check existing queue for this order
-    const { data: existingQ } = await supabaseAdmin
-      .from('queues')
-      .select('*')
-      .eq('order_no', order.order_no)
-      .maybeSingle();
+    let queueItem = local.queues.find((q) => q.order_no === order.order_no);
+    if (!queueItem) {
+      const orderSeq = extractSeqNo(order.order_no);
+      const isOrderSeqFree =
+        orderSeq > 0 && !local.queues.some((q) => q.queue_no === orderSeq);
+      const nextQueueNo = isOrderSeqFree
+        ? orderSeq
+        : (local.queues.length > 0 ? Math.max(...local.queues.map((q) => q.queue_no)) : 0) + 1;
 
-    if (existingQ) {
-      return { order: order as Order, queue: existingQ as QueueItem };
+      const isExpress = Boolean(order.is_express);
+      const defaultEstimated = getEstimatedWaitTime(order.items || [], isExpress);
+      const defaultNote = isExpress
+        ? '⚡ รับออเดอร์คิวด่วนพิเศษ ลัดคิวตามลำดับเร่งด่วนค่ะ'
+        : 'รับออเดอร์เรียบร้อย รอคิวจัดทำตามลำดับค่ะ';
+
+      const itemsSummary = order.items.map((i) => `${i.name} x${i.quantity}`).join(', ');
+
+      queueItem = {
+        id: 'q-' + Date.now(),
+        queue_no: nextQueueNo,
+        order_id: order.id,
+        order_no: order.order_no,
+        customer_name: order.customer_name,
+        items_summary: isExpress ? `⚡ [ลัดคิว] ${itemsSummary}` : itemsSummary,
+        contact_info: `${order.contact_channel}: ${order.contact_value}`,
+        contact_channel: order.contact_channel,
+        contact_value: order.contact_value,
+        status: 'รอตรวจคิว',
+        is_express: isExpress,
+        estimated_time: defaultEstimated,
+        shop_note: defaultNote,
+        is_manual: false,
+        is_archived: false,
+        created_at: now,
+        updated_at: now,
+      };
+
+      local.queues.push(queueItem);
+      order.queue_id = queueItem.id;
     }
 
-    // 4. Calculate next queue_no
-    const { data: allQ } = await supabaseAdmin
-      .from('queues')
-      .select('queue_no')
-      .order('queue_no', { ascending: false })
-      .limit(1);
-
-    const nextQueueNo = (allQ && allQ.length > 0 ? allQ[0].queue_no : 0) + 1;
-    const isExpress = Boolean(order.is_express);
-    const storeInfo = await getStoreData();
-    const defaultEstimated = isExpress
-      ? (storeInfo.settings.express_estimated_time || '⚡ ภายใน 12-24 ชั่วโมง')
-      : '1-2 วันทำการ';
-    const defaultNote = isExpress
-      ? '⚡ รับออเดอร์คิวด่วนพิเศษ ลัดคิวตามลำดับเร่งด่วนค่ะ'
-      : 'รับออเดอร์เรียบร้อย รอคิวจัดทำตามลำดับค่ะ';
-
-    const itemsSummary = (order.items as Order['items'])
-      .map((i) => `${i.name} x${i.quantity}`)
-      .join(', ');
-
-    const newQueuePayload = {
-      queue_no: nextQueueNo,
-      order_id: order.id,
-      order_no: order.order_no,
-      customer_name: order.customer_name,
-      items_summary: isExpress ? `⚡ [ลัดคิว] ${itemsSummary}` : itemsSummary,
-      contact_info: `${order.contact_channel}: ${order.contact_value}`,
-      contact_channel: order.contact_channel,
-      contact_value: order.contact_value,
-      status: 'รอตรวจคิว',
-      is_express: isExpress,
-      estimated_time: defaultEstimated,
-      shop_note: defaultNote,
-      is_manual: false,
-      created_at: now,
-      updated_at: now,
-    };
-
-    const { data: insertedQ, error: qErr } = await supabaseAdmin
-      .from('queues')
-      .insert(newQueuePayload)
-      .select()
-      .single();
-
-    if (qErr) {
-      throw new Error(`Failed to insert queue in Supabase: ${qErr.message}`);
-    }
-
-    await supabaseAdmin
-      .from('orders')
-      .update({ queue_id: insertedQ.id })
-      .eq('id', order.id);
-
-    return { order: order as Order, queue: insertedQ as QueueItem };
-  }
-
-  // Local File Mode
-  const local = readLocalDb();
-  const order = local.orders.find((o) => o.id === orderIdOrNo || o.order_no === orderIdOrNo);
-  if (!order) {
-    throw new Error('ไม่พบคำสั่งซื้อ');
-  }
-
-  order.status = 'confirmed';
-  order.updated_at = now;
-
-  let queueItem = local.queues.find((q) => q.order_no === order.order_no);
-  if (!queueItem) {
-    const nextQueueNo =
-      (local.queues.length > 0 ? Math.max(...local.queues.map((q) => q.queue_no)) : 0) + 1;
-
-    const isExpress = Boolean(order.is_express);
-    const defaultEstimated = isExpress
-      ? (local.settings.express_estimated_time || '⚡ ภายใน 12-24 ชั่วโมง')
-      : '1-2 วันทำการ';
-    const defaultNote = isExpress
-      ? '⚡ รับออเดอร์คิวด่วนพิเศษ ลัดคิวตามลำดับเร่งด่วนค่ะ'
-      : 'รับออเดอร์เรียบร้อย รอคิวจัดทำตามลำดับค่ะ';
-
-    const itemsSummary = order.items.map((i) => `${i.name} x${i.quantity}`).join(', ');
-
-    queueItem = {
-      id: 'q-' + Date.now(),
-      queue_no: nextQueueNo,
-      order_id: order.id,
-      order_no: order.order_no,
-      customer_name: order.customer_name,
-      items_summary: isExpress ? `⚡ [ลัดคิว] ${itemsSummary}` : itemsSummary,
-      contact_info: `${order.contact_channel}: ${order.contact_value}`,
-      contact_channel: order.contact_channel,
-      contact_value: order.contact_value,
-      status: 'รอตรวจคิว',
-      is_express: isExpress,
-      estimated_time: defaultEstimated,
-      shop_note: defaultNote,
-      is_manual: false,
-      created_at: now,
-      updated_at: now,
-    };
-
-    local.queues.push(queueItem);
-    order.queue_id = queueItem.id;
-  }
-
-  writeLocalDb(local);
-  return { order, queue: queueItem };
+    writeLocalDb(local);
+    return { order: normalizeOrderRecord(order), queue: normalizeQueueRecord(queueItem) };
+  });
 }
 
 export async function updateQueueStatus(
@@ -1098,7 +1239,8 @@ export async function updateQueueStatus(
   status: QueueStatus,
   estimatedTime?: string,
   shopNote?: string,
-  isExpress?: boolean
+  isExpress?: boolean,
+  isArchived?: boolean
 ): Promise<QueueItem> {
   const now = new Date().toISOString();
 
@@ -1110,8 +1252,13 @@ export async function updateQueueStatus(
     }
     queue.status = status;
     if (estimatedTime !== undefined) queue.estimated_time = estimatedTime;
-    if (shopNote !== undefined) queue.shop_note = shopNote;
+    if (shopNote !== undefined) queue.shop_note = shopNote.replace(/^\u200B+/, '');
     if (isExpress !== undefined) queue.is_express = isExpress;
+    if (isArchived !== undefined) {
+      queue.is_archived = isArchived;
+    } else if (status !== 'เสร็จแล้ว' && status !== 'ยกเลิก') {
+      queue.is_archived = false;
+    }
     queue.updated_at = now;
 
     await neonSet('queues', queues);
@@ -1122,23 +1269,50 @@ export async function updateQueueStatus(
       if (lq) {
         lq.status = status;
         if (estimatedTime !== undefined) lq.estimated_time = estimatedTime;
-        if (shopNote !== undefined) lq.shop_note = shopNote;
+        if (shopNote !== undefined) lq.shop_note = shopNote.replace(/^\u200B+/, '');
         if (isExpress !== undefined) lq.is_express = isExpress;
+        if (isArchived !== undefined) {
+          lq.is_archived = isArchived;
+        } else if (status !== 'เสร็จแล้ว' && status !== 'ยกเลิก') {
+          lq.is_archived = false;
+        }
         lq.updated_at = now;
         writeLocalDb(local);
       }
     } catch {}
 
-    return queue;
+    return normalizeQueueRecord(queue);
   }
 
   if (isSupabaseConfigured && supabaseAdmin) {
+    const { data: currentRow } = await supabaseAdmin
+      .from('queues')
+      .select('shop_note')
+      .eq('id', queueId)
+      .maybeSingle();
+
+    const currentNormalized = currentRow
+      ? normalizeQueueRecord(currentRow as QueueItem)
+      : { is_archived: false, shop_note: '' };
+
+    const targetArchived =
+      isArchived !== undefined
+        ? isArchived
+        : status !== 'เสร็จแล้ว' && status !== 'ยกเลิก'
+        ? false
+        : Boolean(currentNormalized.is_archived);
+
+    const baseNote =
+      shopNote !== undefined
+        ? shopNote.replace(/^\u200B+/, '')
+        : (currentNormalized.shop_note || '');
+
     const updatePayload: Record<string, unknown> = {
       status,
+      shop_note: targetArchived ? `${ARCHIVED_MARKER}${baseNote}` : baseNote,
       updated_at: now,
     };
     if (estimatedTime !== undefined) updatePayload.estimated_time = estimatedTime;
-    if (shopNote !== undefined) updatePayload.shop_note = shopNote;
     if (isExpress !== undefined) updatePayload.is_express = isExpress;
 
     const { data, error } = await supabaseAdmin
@@ -1151,7 +1325,7 @@ export async function updateQueueStatus(
     if (error) {
       throw new Error(`Failed to update queue in Supabase: ${error.message}`);
     }
-    return data as QueueItem;
+    return normalizeQueueRecord(data as QueueItem);
   }
 
   const local = readLocalDb();
@@ -1162,12 +1336,17 @@ export async function updateQueueStatus(
 
   queue.status = status;
   if (estimatedTime !== undefined) queue.estimated_time = estimatedTime;
-  if (shopNote !== undefined) queue.shop_note = shopNote;
+  if (shopNote !== undefined) queue.shop_note = shopNote.replace(/^\u200B+/, '');
   if (isExpress !== undefined) queue.is_express = isExpress;
+  if (isArchived !== undefined) {
+    queue.is_archived = isArchived;
+  } else if (status !== 'เสร็จแล้ว' && status !== 'ยกเลิก') {
+    queue.is_archived = false;
+  }
   queue.updated_at = now;
 
   writeLocalDb(local);
-  return queue;
+  return normalizeQueueRecord(queue);
 }
 
 export async function addManualQueue(data: {
@@ -1178,99 +1357,105 @@ export async function addManualQueue(data: {
   shop_note?: string;
   is_express?: boolean;
 }): Promise<QueueItem> {
-  const now = new Date().toISOString();
+  return withOrderLock(async () => {
+    const now = new Date().toISOString();
+    const defaultEst =
+      data.estimated_time ||
+      getEstimatedWaitTime([{ name: data.items_summary }], Boolean(data.is_express));
 
-  if (isNeonConfigured) {
-    const queues = await neonGet<QueueItem[]>('queues', []);
-    const nextQueueNo =
-      (queues.length > 0 ? Math.max(...queues.map((q) => q.queue_no)) : 0) + 1;
+    if (isNeonConfigured) {
+      const [orders, queues] = await Promise.all([
+        neonGet<Order[]>('orders', []),
+        neonGet<QueueItem[]>('queues', []),
+      ]);
+      const nextQueueNo = computeNextSequenceNumber(orders, queues);
+
+      const newQueue: QueueItem = {
+        id: 'q-man-' + Date.now(),
+        queue_no: nextQueueNo,
+        order_no: formatQueueNo(nextQueueNo),
+        customer_name: data.customer_name,
+        items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
+        contact_info: data.contact_info || '-',
+        status: 'รอตรวจคิว',
+        is_express: Boolean(data.is_express),
+        estimated_time: defaultEst,
+        shop_note: data.shop_note || (data.is_express ? '⚡ คิวด่วนพิเศษ เพิ่มโดยร้านค้า' : 'คิวเพิ่มด้วยตนเองโดยร้านค้า'),
+        is_manual: true,
+        is_archived: false,
+        created_at: now,
+        updated_at: now,
+      };
+
+      queues.push(newQueue);
+      await neonSet('queues', queues);
+
+      try {
+        const local = readLocalDb();
+        local.queues.push(newQueue);
+        writeLocalDb(local);
+      } catch {}
+
+      return normalizeQueueRecord(newQueue);
+    }
+
+    if (isSupabaseConfigured && supabaseAdmin) {
+      const [{ data: existingOrders }, { data: existingQueues }] = await Promise.all([
+        supabaseAdmin.from('orders').select('order_no'),
+        supabaseAdmin.from('queues').select('queue_no, order_no'),
+      ]);
+      const nextQueueNo = computeNextSequenceNumber(existingOrders || [], existingQueues || []);
+      const newQueuePayload = {
+        queue_no: nextQueueNo,
+        order_no: formatQueueNo(nextQueueNo),
+        customer_name: data.customer_name,
+        items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
+        contact_info: data.contact_info || '-',
+        status: 'รอตรวจคิว',
+        is_express: Boolean(data.is_express),
+        estimated_time: defaultEst,
+        shop_note: data.shop_note || (data.is_express ? '⚡ คิวด่วนพิเศษ เพิ่มโดยร้านค้า' : 'คิวเพิ่มด้วยตนเองโดยร้านค้า'),
+        is_manual: true,
+        created_at: now,
+        updated_at: now,
+      };
+
+      const { data: inserted, error } = await supabaseAdmin
+        .from('queues')
+        .insert(newQueuePayload)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to add manual queue to Supabase: ${error.message}`);
+      }
+      return normalizeQueueRecord(inserted as QueueItem);
+    }
+
+    const local = readLocalDb();
+    const nextQueueNo = computeNextSequenceNumber(local.orders, local.queues);
 
     const newQueue: QueueItem = {
       id: 'q-man-' + Date.now(),
       queue_no: nextQueueNo,
-      order_no: 'MAN-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+      order_no: formatQueueNo(nextQueueNo),
       customer_name: data.customer_name,
       items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
       contact_info: data.contact_info || '-',
       status: 'รอตรวจคิว',
       is_express: Boolean(data.is_express),
-      estimated_time: data.estimated_time || (data.is_express ? '⚡ ภายใน 12-24 ชั่วโมง' : '1-2 วันทำการ'),
+      estimated_time: defaultEst,
       shop_note: data.shop_note || (data.is_express ? '⚡ คิวด่วนพิเศษ เพิ่มโดยร้านค้า' : 'คิวเพิ่มด้วยตนเองโดยร้านค้า'),
       is_manual: true,
+      is_archived: false,
       created_at: now,
       updated_at: now,
     };
 
-    queues.push(newQueue);
-    await neonSet('queues', queues);
-
-    try {
-      const local = readLocalDb();
-      local.queues.push(newQueue);
-      writeLocalDb(local);
-    } catch {}
-
-    return newQueue;
-  }
-
-  if (isSupabaseConfigured && supabaseAdmin) {
-    const { data: allQ } = await supabaseAdmin
-      .from('queues')
-      .select('queue_no')
-      .order('queue_no', { ascending: false })
-      .limit(1);
-
-    const nextQueueNo = (allQ && allQ.length > 0 ? allQ[0].queue_no : 0) + 1;
-    const newQueuePayload = {
-      queue_no: nextQueueNo,
-      order_no: 'MAN-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
-      customer_name: data.customer_name,
-      items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
-      contact_info: data.contact_info || '-',
-      status: 'รอตรวจคิว',
-      is_express: Boolean(data.is_express),
-      estimated_time: data.estimated_time || (data.is_express ? '⚡ ภายใน 12-24 ชั่วโมง' : '1-2 วันทำการ'),
-      shop_note: data.shop_note || (data.is_express ? '⚡ คิวด่วนพิเศษ เพิ่มโดยร้านค้า' : 'คิวเพิ่มด้วยตนเองโดยร้านค้า'),
-      is_manual: true,
-      created_at: now,
-      updated_at: now,
-    };
-
-    const { data: inserted, error } = await supabaseAdmin
-      .from('queues')
-      .insert(newQueuePayload)
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to add manual queue to Supabase: ${error.message}`);
-    }
-    return inserted as QueueItem;
-  }
-
-  const local = readLocalDb();
-  const nextQueueNo =
-    (local.queues.length > 0 ? Math.max(...local.queues.map((q) => q.queue_no)) : 0) + 1;
-
-  const newQueue: QueueItem = {
-    id: 'q-man-' + Date.now(),
-    queue_no: nextQueueNo,
-    order_no: 'MAN-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
-    customer_name: data.customer_name,
-    items_summary: data.is_express ? `⚡ [ลัดคิว] ${data.items_summary}` : data.items_summary,
-    contact_info: data.contact_info || '-',
-    status: 'รอตรวจคิว',
-    is_express: Boolean(data.is_express),
-    estimated_time: data.estimated_time || (data.is_express ? '⚡ ภายใน 12-24 ชั่วโมง' : '1-2 วันทำการ'),
-    shop_note: data.shop_note || (data.is_express ? '⚡ คิวด่วนพิเศษ เพิ่มโดยร้านค้า' : 'คิวเพิ่มด้วยตนเองโดยร้านค้า'),
-    is_manual: true,
-    created_at: now,
-    updated_at: now,
-  };
-
-  local.queues.push(newQueue);
-  writeLocalDb(local);
-  return newQueue;
+    local.queues.push(newQueue);
+    writeLocalDb(local);
+    return normalizeQueueRecord(newQueue);
+  });
 }
 
 export async function deleteQueue(queueId: string): Promise<boolean> {
